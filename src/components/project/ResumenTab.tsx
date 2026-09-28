@@ -6,15 +6,50 @@ import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import { fmtDate, statusLabel } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtRelative, statusLabel } from "@/lib/format";
+import { useNotes } from "@/lib/hooks/useProjectDetail";
+import { UpdateImages } from "@/components/project/UpdateImages";
 import type { Project } from "@/lib/database.types";
 
 export function ResumenTab({ project }: { project: Project }) {
-  const { clients, nameFor } = useAppData();
+  const { me, isStaff, clients, nameFor } = useAppData();
   const [nextStep, setNextStep] = useState(project.next_step || "");
   const [saving, setSaving] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const { rows: updates } = useNotes(project.id);
   const client = project.client_id ? clients[project.client_id] : null;
   const devs = project.developer_ids || [];
+
+  const lastUpdate = Object.values(updates).sort((a, b) =>
+    (b.created_at || "").localeCompare(a.created_at || ""),
+  )[0];
+
+  function startEditNotes() {
+    setNotesDraft(project.notes_doc || "");
+    setEditingNotes(true);
+  }
+
+  async function saveNotes() {
+    setSavingNotes(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("projects")
+      .update({
+        notes_doc: notesDraft,
+        notes_updated_at: new Date().toISOString(),
+        notes_updated_by: me.id,
+      })
+      .eq("id", project.id);
+    setSavingNotes(false);
+    if (error) {
+      toast("No se pudieron guardar las notas: " + error.message);
+      return;
+    }
+    setEditingNotes(false);
+    toast("Notas guardadas");
+  }
 
   async function saveNextStep() {
     setSaving(true);
@@ -54,6 +89,77 @@ export function ResumenTab({ project }: { project: Project }) {
         <button className="btn btn-sm" onClick={saveNextStep} disabled={saving}>
           {saving ? "Guardando…" : "Guardar próximo paso"}
         </button>
+
+        <div className="row between section-title">
+          <span>Última actualización</span>
+          <Link href={`/projects/${project.id}?tab=actualizaciones`} className="section-link">
+            {lastUpdate ? "Ver todas →" : "Añadir →"}
+          </Link>
+        </div>
+        {lastUpdate ? (
+          <div className="last-update">
+            <div className="note-head">
+              <Avatar id={lastUpdate.author_id || ""} name={nameFor(lastUpdate.author_id)} size={20} />
+              <span className="note-author">{nameFor(lastUpdate.author_id)}</span>
+              <span className="note-time" title={fmtDateTime(lastUpdate.created_at)}>
+                {fmtRelative(lastUpdate.created_at)}
+              </span>
+            </div>
+            {lastUpdate.text && <div className="note-text">{lastUpdate.text}</div>}
+            <UpdateImages paths={lastUpdate.image_paths || []} size={72} />
+          </div>
+        ) : (
+          <div className="muted" style={{ fontSize: 13 }}>
+            Todavía no hay actualizaciones.
+          </div>
+        )}
+
+        <div className="row between section-title">
+          <span>Notas del proyecto</span>
+          {isStaff && !editingNotes && (
+            <button className="section-link" onClick={startEditNotes}>
+              {project.notes_doc ? "Editar" : "Añadir notas"}
+            </button>
+          )}
+        </div>
+        {editingNotes ? (
+          <>
+            <div className="field">
+              <textarea
+                rows={8}
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                placeholder="Arquitectura, stack, servicios usados, decisiones tomadas, enlaces útiles…"
+                autoFocus
+              />
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+              No guardes contraseñas ni claves aquí: pon solo dónde encontrarlas.
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn btn-sm btn-primary" onClick={saveNotes} disabled={savingNotes}>
+                {savingNotes ? "Guardando…" : "Guardar notas"}
+              </button>
+              <button className="btn btn-sm" onClick={() => setEditingNotes(false)} disabled={savingNotes}>
+                Cancelar
+              </button>
+            </div>
+          </>
+        ) : project.notes_doc ? (
+          <>
+            <div className="notes-doc">{project.notes_doc}</div>
+            {project.notes_updated_at && (
+              <div className="muted" style={{ fontSize: 11.8, marginTop: 6 }}>
+                Editado por {nameFor(project.notes_updated_by)} · {fmtRelative(project.notes_updated_at)}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="muted" style={{ fontSize: 13 }}>
+            Sin notas todavía.
+          </div>
+        )}
+
         {project.description && (
           <>
             <div className="section-title">Descripción</div>

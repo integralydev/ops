@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
-import { fmtDate, statusLabel } from "@/lib/format";
+import { fmtDateTime, fmtRelative, statusLabel } from "@/lib/format";
 import type { Project } from "@/lib/database.types";
 
 export function ProjectTable({
   groups,
   pendingTasks,
+  lastUpdates,
 }: {
   groups: { key: string; label: string; projects: Project[] }[];
   pendingTasks: Record<string, number>;
+  lastUpdates: Record<string, { author_id: string | null; text: string; created_at: string }>;
 }) {
   const { clients, nameFor } = useAppData();
   const router = useRouter();
@@ -27,7 +29,7 @@ export function ProjectTable({
             <th className="col-next">Próximo paso</th>
             <th className="col-owner">Encargado</th>
             <th className="col-num">Pendientes</th>
-            <th className="col-date">Actualizado</th>
+            <th className="col-date">Última actualización</th>
           </tr>
         </thead>
         {groups.map((g) => (
@@ -89,7 +91,20 @@ export function ProjectTable({
                   <td className="col-num">
                     {pending ? <span className="ptable-count">{pending}</span> : <span className="muted">—</span>}
                   </td>
-                  <td className="col-date muted">{fmtDate(p.updated_at)}</td>
+                  <td className="col-date">
+                    {lastUpdates[p.id] ? (
+                      <div
+                        className="row"
+                        style={{ gap: 6 }}
+                        title={`${nameFor(lastUpdates[p.id].author_id)} · ${fmtDateTime(lastUpdates[p.id].created_at)}\n${lastUpdates[p.id].text}`}
+                      >
+                        <Avatar id={lastUpdates[p.id].author_id || ""} name={nameFor(lastUpdates[p.id].author_id)} size={18} />
+                        <span className="muted">{fmtRelative(lastUpdates[p.id].created_at)}</span>
+                      </div>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}

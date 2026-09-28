@@ -5,6 +5,7 @@ import { useAppData } from "@/components/app-data";
 import { useProjects } from "@/lib/hooks/useProjects";
 import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
+import { RecentActivity } from "@/components/RecentActivity";
 import { useRouter } from "next/navigation";
 import { PROJECT_STATUSES } from "@/lib/format";
 
@@ -50,6 +51,9 @@ export default function DashboardPage() {
             <span>Personas en el equipo</span>
           </div>
         </div>
+
+        <div className="section-title">Actividad reciente</div>
+        <RecentActivity projects={projects} />
 
         <div className="section-title">{isStaff ? "Proyectos en curso" : "Tus proyectos en curso"}</div>
         {loading ? (

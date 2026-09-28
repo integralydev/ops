@@ -42,6 +42,9 @@ create table if not exists projects (
   next_step text default '',
   description text default '',
   demo_url text default '',
+  notes_doc text default '',
+  notes_updated_at timestamptz,
+  notes_updated_by uuid references auth.users (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   created_by uuid references auth.users (id)
@@ -86,6 +89,7 @@ create table if not exists notes (
   project_id uuid not null references projects (id) on delete cascade,
   author_id uuid references auth.users (id),
   text text not null,
+  image_paths text[] not null default '{}',
   created_at timestamptz not null default now()
 );
 create index if not exists notes_project_id_idx on notes (project_id);
@@ -273,7 +277,7 @@ create policy "files_delete_owner" on files for delete to authenticated
 create policy "notes_select_member" on notes for select to authenticated using (is_project_member(project_id));
 create policy "notes_insert_member" on notes for insert to authenticated with check (is_project_member(project_id));
 create policy "notes_delete_owner" on notes for delete to authenticated
-  using (is_staff() or author_id = auth.uid());
+  using (is_staff());
 
 -- ---------------------------------------------------------------------------
 -- Realtime: para que la app se actualice en vivo entre pestañas/personas

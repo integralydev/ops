@@ -14,7 +14,7 @@ const TABS = [
   ["resumen", "Resumen"],
   ["tareas", "Tareas"],
   ["archivos", "Archivos"],
-  ["notas", "Notas"],
+  ["actualizaciones", "Actualizaciones"],
 ] as const;
 
 export default function ProjectDetailPage() {
@@ -22,7 +22,8 @@ export default function ProjectDetailPage() {
   const projectId = params.id;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tab = searchParams.get("tab") || "resumen";
+  const rawTab = searchParams.get("tab") || "resumen";
+  const tab = rawTab === "notas" ? "actualizaciones" : rawTab; // enlaces antiguos
   const { isStaff } = useAppData();
   const project = useProject(projectId);
   const [showEdit, setShowEdit] = useState(false);
@@ -81,7 +82,7 @@ export default function ProjectDetailPage() {
           <TasksTab project={project} />
         ) : tab === "archivos" ? (
           <FilesTab project={project} />
-        ) : tab === "notas" ? (
+        ) : tab === "actualizaciones" ? (
           <NotesTab project={project} />
         ) : (
           <ResumenTab project={project} />

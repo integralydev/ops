@@ -47,6 +47,9 @@ export interface Project {
   next_step: string | null;
   description: string | null;
   demo_url: string | null;
+  notes_doc: string | null;
+  notes_updated_at: string | null;
+  notes_updated_by: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -79,6 +82,7 @@ export interface Note {
   project_id: string;
   author_id: string | null;
   text: string;
+  image_paths: string[] | null;
   created_at: string;
 }
 

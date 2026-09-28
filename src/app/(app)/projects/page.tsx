@@ -39,6 +39,9 @@ export default function ProjectsPage() {
   const { projects, loading } = useProjects();
   const [showNew, setShowNew] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<Record<string, number>>({});
+  const [lastUpdates, setLastUpdates] = useState<
+    Record<string, { author_id: string | null; text: string; created_at: string }>
+  >({});
   const view = useSyncExternalStore(subscribeView, readView, () => "table" as View);
   const router = useRouter();
   const all = Object.values(projects);
@@ -55,6 +58,19 @@ export default function ProjectsPage() {
         const counts: Record<string, number> = {};
         (data || []).forEach((t) => (counts[t.project_id] = (counts[t.project_id] || 0) + 1));
         setPendingTasks(counts);
+      });
+    // Última actualización de cada proyecto (la más reciente de la tabla notes)
+    supabase
+      .from("notes")
+      .select("project_id, author_id, text, created_at")
+      .order("created_at", { ascending: false })
+      .limit(500)
+      .then(({ data }) => {
+        const latest: Record<string, { author_id: string | null; text: string; created_at: string }> = {};
+        (data || []).forEach((n) => {
+          if (!latest[n.project_id]) latest[n.project_id] = n;
+        });
+        setLastUpdates(latest);
       });
   }, [projectCount]);
 
@@ -113,7 +129,7 @@ export default function ProjectsPage() {
         ) : view === "timeline" ? (
           <ProjectTimeline projects={all} />
         ) : view === "table" ? (
-          <ProjectTable groups={groups} pendingTasks={pendingTasks} />
+          <ProjectTable groups={groups} pendingTasks={pendingTasks} lastUpdates={lastUpdates} />
         ) : (
           groups.map((g) => (
             <div key={g.key} className="section-block">

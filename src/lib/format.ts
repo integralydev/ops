@@ -21,6 +21,18 @@ export function fmtDateTime(iso?: string | null) {
   );
 }
 
+// "hace 5 min", "hace 3 h", "ayer", o la fecha si es más antiguo
+export function fmtRelative(iso?: string | null) {
+  if (!iso) return "";
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return "ahora mismo";
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+  if (diff < 2 * 86400) return "ayer";
+  if (diff < 7 * 86400) return `hace ${Math.floor(diff / 86400)} días`;
+  return fmtDate(iso);
+}
+
 export function fmtSize(bytes?: number | null) {
   const b = bytes || 0;
   if (b < 1024) return b + " B";
