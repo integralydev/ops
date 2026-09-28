@@ -150,6 +150,34 @@ button{font-family:inherit;}
 .demo-link:hover{background:var(--accent); color:var(--accent-ink);}
 .ptable-count{display:inline-block; min-width:22px; padding:2px 7px; border-radius:99px; background:var(--accent-soft); color:var(--accent-dim); font-weight:700; font-size:12px;}
 
+/* ---------- Línea temporal de proyectos ---------- */
+.tl{min-width:820px; padding:6px 0 4px;}
+.tl-row{display:grid; align-items:center;}
+.tl-head{padding:12px 16px 0;}
+.tl-group{font-size:11px; text-transform:uppercase; letter-spacing:.12em; font-weight:700; color:var(--accent); text-align:center; padding-bottom:6px; border-bottom:2px solid var(--accent-soft); margin:0 6px;}
+.tl-group-exec{color:var(--success); border-bottom-color:var(--success-soft);}
+.tl-phases{padding:10px 16px 12px; border-bottom:1px solid var(--border);}
+.tl-label-head{font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:700; color:var(--ink-faint);}
+.tl-phase{font-size:12px; font-weight:600; color:var(--ink-soft); text-align:center; padding:0 4px;}
+.tl-project{padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .1s ease;}
+.tl-project:hover{background:var(--surface-2);}
+.tl-label{min-width:0; padding-right:12px;}
+.tl-label .ptable-name{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.tl-track{position:relative; display:grid; grid-template-columns:subgrid; align-items:center; height:28px;}
+.tl-line{position:absolute; left:0; right:0; top:50%; height:2px; margin-top:-1px; background:var(--border);}
+.tl-fill{position:absolute; left:0; top:50%; height:4px; margin-top:-2px; border-radius:99px; transition:width .5s cubic-bezier(.4,0,.2,1);}
+.tl-fill-comercial{background:var(--accent);}
+.tl-fill-ejecucion{background:var(--success);}
+.tl-cell{position:relative; display:flex; justify-content:center;}
+.tl-dot{width:12px; height:12px; border-radius:50%; background:var(--surface); border:2px solid var(--border); transition:all .3s ease;}
+.tl-dot.done{background:var(--ink-faint); border-color:var(--ink-faint); width:9px; height:9px;}
+.tl-dot.current{width:20px; height:20px; border:3px solid var(--surface); box-shadow:0 0 0 2px currentColor; background:currentColor;}
+.tl-out{padding:16px;}
+.tl-out-title{font-size:11px; text-transform:uppercase; letter-spacing:.12em; font-weight:700; color:var(--ink-faint); margin-bottom:10px;}
+.tl-out-list{display:flex; flex-wrap:wrap; gap:8px;}
+.tl-out-item{display:inline-flex; align-items:center; gap:10px; padding:7px 10px 7px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); cursor:pointer; font-size:13px; color:var(--ink); font-family:inherit;}
+.tl-out-item:hover{border-color:var(--ink-faint);}
+
 .tabs{display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:20px;}
 .tab{padding:9px 4px; margin-right:20px; font-size:13.6px; font-weight:600; color:var(--ink-faint); border-bottom:2px solid transparent; cursor:pointer; background:none; border-top:none; border-left:none; border-right:none;}
 .tab.active{color:var(--ink); border-bottom-color:var(--accent);}

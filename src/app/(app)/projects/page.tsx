@@ -6,11 +6,12 @@ import { useAppData } from "@/components/app-data";
 import { useProjects } from "@/lib/hooks/useProjects";
 import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectTable } from "@/components/ProjectTable";
+import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { PROJECT_STATUSES } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 
-type View = "table" | "cards";
+type View = "table" | "cards" | "timeline";
 
 // Vista preferida (tabla/tarjetas), recordada en este navegador.
 const VIEW_KEY = "projectsView";
@@ -20,7 +21,8 @@ function subscribeView(cb: () => void) {
 }
 function readView(): View {
   try {
-    return localStorage.getItem(VIEW_KEY) === "cards" ? "cards" : "table";
+    const v = localStorage.getItem(VIEW_KEY);
+    return v === "cards" || v === "timeline" ? v : "table";
   } catch {
     return "table";
   }
@@ -88,6 +90,9 @@ export default function ProjectsPage() {
             <button className={view === "cards" ? "active" : ""} onClick={() => saveView("cards")}>
               Tarjetas
             </button>
+            <button className={view === "timeline" ? "active" : ""} onClick={() => saveView("timeline")}>
+              Línea temporal
+            </button>
           </div>
           {isStaff && (
             <button className="btn btn-primary" onClick={() => setShowNew(true)}>
@@ -105,6 +110,8 @@ export default function ProjectsPage() {
               ? 'Todavía no hay proyectos. Crea el primero con "+ Nuevo proyecto".'
               : "No tienes proyectos asignados todavía."}
           </div>
+        ) : view === "timeline" ? (
+          <ProjectTimeline projects={all} />
         ) : view === "table" ? (
           <ProjectTable groups={groups} pendingTasks={pendingTasks} />
         ) : (
