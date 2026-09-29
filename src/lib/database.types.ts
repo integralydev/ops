@@ -60,6 +60,7 @@ export interface Task {
   project_id: string;
   title: string;
   assignee_id: string | null;
+  assigned_to_client: boolean;
   done: boolean;
   done_at: string | null;
   created_at: string;

@@ -13,7 +13,7 @@ export function ProjectTable({
   lastUpdates,
 }: {
   groups: { key: string; label: string; projects: Project[] }[];
-  pendingTasks: Record<string, number>;
+  pendingTasks: Record<string, { team: number; client: number }>;
   lastUpdates: Record<string, { author_id: string | null; text: string; created_at: string }>;
 }) {
   const { clients, nameFor } = useAppData();
@@ -24,7 +24,7 @@ export function ProjectTable({
       <table className="ptable">
         <thead>
           <tr>
-            <th>Proyecto</th>
+            <th>Cliente · proyecto</th>
             <th>Fase</th>
             <th className="col-next">Próximo paso</th>
             <th className="col-owner">Encargado</th>
@@ -41,15 +41,15 @@ export function ProjectTable({
             </tr>
             {g.projects.map((p) => {
               const client = p.client_id ? clients[p.client_id] : null;
-              const pending = pendingTasks[p.id] || 0;
+              const pending = pendingTasks[p.id] || { team: 0, client: 0 };
               return (
                 <tr key={p.id} className="ptable-row" onClick={() => router.push(`/projects/${p.id}`)}>
                   <td>
                     <Link href={`/projects/${p.id}`} className="ptable-name" onClick={(e) => e.stopPropagation()}>
-                      {p.name}
+                      {client ? client.name : p.name}
                     </Link>
                     <div className="ptable-sub">
-                      {client ? client.name : "Sin cliente"}
+                      {client ? p.name : "Sin cliente"}
                       {p.demo_url && (
                         <a
                           className="demo-link"
@@ -89,7 +89,22 @@ export function ProjectTable({
                     )}
                   </td>
                   <td className="col-num">
-                    {pending ? <span className="ptable-count">{pending}</span> : <span className="muted">—</span>}
+                    {pending.team || pending.client ? (
+                      <span style={{ whiteSpace: "nowrap" }}>
+                        {pending.team > 0 && (
+                          <span className="ptable-count" title="Pendientes del equipo">
+                            {pending.team}
+                          </span>
+                        )}
+                        {pending.client > 0 && (
+                          <span className="ptable-count is-client" title="Pendientes del cliente">
+                            🏢 {pending.client}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
                   </td>
                   <td className="col-date">
                     {lastUpdates[p.id] ? (

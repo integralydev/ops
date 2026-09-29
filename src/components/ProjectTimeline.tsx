@@ -35,7 +35,7 @@ export function ProjectTimeline({ projects }: { projects: Project[] }) {
           </div>
         </div>
         <div className="tl-row tl-phases" style={cols}>
-          <div className="tl-label-head">Proyecto</div>
+          <div className="tl-label-head">Cliente · proyecto</div>
           {FLOW.map((s) => (
             <div key={s.value} className="tl-phase" title={s.hint}>
               {s.label}
@@ -49,9 +49,9 @@ export function ProjectTimeline({ projects }: { projects: Project[] }) {
           return (
             <div key={p.id} className="tl-row tl-project" style={cols} onClick={() => router.push(`/projects/${p.id}`)}>
               <div className="tl-label">
-                <div className="ptable-name">{p.name}</div>
+                <div className="ptable-name">{client ? client.name : p.name}</div>
                 <div className="ptable-sub">
-                  {client ? client.name : "Sin cliente"}
+                  {client ? p.name : "Sin cliente"}
                   {p.owner_id ? ` · ${nameFor(p.owner_id)}` : ""}
                 </div>
               </div>
@@ -83,7 +83,9 @@ export function ProjectTimeline({ projects }: { projects: Project[] }) {
             <div className="tl-out-list">
               {outOfFlow.map((p) => (
                 <button key={p.id} className="tl-out-item" onClick={() => router.push(`/projects/${p.id}`)}>
-                  <span className="ptable-name">{p.name}</span>
+                  <span className="ptable-name">
+                    {p.client_id && clients[p.client_id] ? `${clients[p.client_id].name} · ${p.name}` : p.name}
+                  </span>
                   <span className={`badge badge-${p.status}`}>
                     <span className="badge-dot" />
                     {statusLabel(p.status)}

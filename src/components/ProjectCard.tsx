@@ -13,12 +13,8 @@ export function ProjectCard({ project }: { project: Project }) {
     <Link href={`/projects/${project.id}`} className="card proj-card">
       <div className="proj-top">
         <div>
-          <div className="proj-name">{project.name}</div>
-          {client ? (
-            <div className="proj-client">{client.name}</div>
-          ) : project.client_id ? (
-            <div className="proj-client">Cliente</div>
-          ) : null}
+          <div className="proj-name">{client ? client.name : project.name}</div>
+          <div className="proj-client">{client ? project.name : "Sin cliente"}</div>
         </div>
         <span className={`badge badge-${project.status}`}>
           <span className="badge-dot" />

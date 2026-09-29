@@ -59,6 +59,7 @@ create table if not exists tasks (
   project_id uuid not null references projects (id) on delete cascade,
   title text not null,
   assignee_id uuid references auth.users (id),
+  assigned_to_client boolean not null default false,
   done boolean not null default false,
   done_at timestamptz,
   created_at timestamptz not null default now(),

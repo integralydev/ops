@@ -13,7 +13,7 @@ const LIMIT = 8;
 // Últimas actualizaciones de todos los proyectos visibles (RLS filtra por
 // proyecto). Se actualiza en vivo cuando alguien publica una nueva.
 export function RecentActivity({ projects }: { projects: Record<string, Project> }) {
-  const { nameFor } = useAppData();
+  const { nameFor, clients } = useAppData();
   const [items, setItems] = useState<Note[] | null>(null);
   const supabase = useMemo(() => createClient(), []);
 
@@ -54,6 +54,7 @@ export function RecentActivity({ projects }: { projects: Record<string, Project>
     <div className="card">
       {items.map((n) => {
         const project = projects[n.project_id];
+        const client = project?.client_id ? clients[project.client_id] : null;
         const imgs = n.image_paths?.length || 0;
         return (
           <Link key={n.id} href={`/projects/${n.project_id}?tab=actualizaciones`} className="activity-row">
@@ -62,7 +63,8 @@ export function RecentActivity({ projects }: { projects: Record<string, Project>
               <div className="note-head">
                 <span className="note-author">{nameFor(n.author_id)}</span>
                 <span className="muted" style={{ fontSize: 12.3 }}>
-                  en <b style={{ color: "var(--ink)", fontWeight: 600 }}>{project?.name || "un proyecto"}</b>
+                  en <b style={{ color: "var(--ink)", fontWeight: 700 }}>{client ? client.name : project?.name || "un proyecto"}</b>
+                  {client && project ? ` · ${project.name}` : ""}
                 </span>
               </div>
               <div className="activity-text">

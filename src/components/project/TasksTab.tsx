@@ -6,23 +6,70 @@ import { useAppData } from "@/components/app-data";
 import { useTasks } from "@/lib/hooks/useProjectDetail";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import type { Project } from "@/lib/database.types";
+import type { Project, Task } from "@/lib/database.types";
+
+// Valor especial del desplegable de asignación: la tarea está en manos del cliente
+const CLIENT = "__client";
+
+type Filter = "all" | "mine" | "client" | "none" | string; // string = id de una persona
+
+// Desplegable → columnas de la tabla tasks
+function assignmentFields(value: string) {
+  return value === CLIENT
+    ? { assignee_id: null, assigned_to_client: true }
+    : { assignee_id: value || null, assigned_to_client: false };
+}
+
+function assignmentValue(t: Task) {
+  return t.assigned_to_client ? CLIENT : t.assignee_id || "";
+}
 
 export function TasksTab({ project }: { project: Project }) {
-  const { me, isStaff, nameFor } = useAppData();
+  const { me, isStaff, nameFor, clients } = useAppData();
   const { rows: tasks, loading } = useTasks(project.id);
   const [title, setTitle] = useState("");
   const [assignee, setAssignee] = useState("");
   const [adding, setAdding] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
+
+  const client = project.client_id ? clients[project.client_id] : null;
+  const clientLabel = client ? client.name : "Cliente";
 
   const assignable = [project.owner_id, ...(project.developer_ids || [])].filter(
     (v, i, arr): v is string => !!v && arr.indexOf(v) === i,
   );
 
-  const list = Object.values(tasks).sort((a, b) => {
-    if (a.done !== b.done) return a.done ? 1 : -1;
-    return (b.created_at || "").localeCompare(a.created_at || "");
-  });
+  const all = Object.values(tasks);
+
+  function matches(t: Task, f: Filter) {
+    if (f === "all") return true;
+    if (f === "mine") return t.assignee_id === me.id;
+    if (f === "client") return t.assigned_to_client;
+    if (f === "none") return !t.assignee_id && !t.assigned_to_client;
+    return t.assignee_id === f;
+  }
+  const pendingCount = (f: Filter) => all.filter((t) => !t.done && matches(t, f)).length;
+
+  // Personas con tareas en este proyecto (aunque ya no estén asignadas a él), sin contarte a ti
+  const people = [
+    ...assignable,
+    ...all.map((t) => t.assignee_id).filter((v): v is string => !!v),
+  ].filter((v, i, arr) => v !== me.id && arr.indexOf(v) === i);
+
+  const filters: { key: Filter; label: string }[] = [
+    { key: "all", label: "Todas" },
+    { key: "mine", label: "Mías" },
+    { key: "client", label: `🏢 ${clientLabel}` },
+    ...people.map((id) => ({ key: id, label: nameFor(id) })),
+    { key: "none", label: "Sin asignar" },
+  ];
+
+  const list = all
+    .filter((t) => matches(t, filter))
+    .sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return (b.created_at || "").localeCompare(a.created_at || "");
+    });
 
   async function addTask() {
     if (!title.trim()) return;
@@ -31,7 +78,7 @@ export function TasksTab({ project }: { project: Project }) {
     const { error } = await supabase.from("tasks").insert({
       project_id: project.id,
       title: title.trim(),
-      assignee_id: assignee || null,
+      ...assignmentFields(assignee),
       created_by: me.id,
     });
     setAdding(false);
@@ -51,12 +98,9 @@ export function TasksTab({ project }: { project: Project }) {
     if (error) toast("No se pudo actualizar: " + error.message);
   }
 
-  async function assignTask(taskId: string, assigneeId: string) {
+  async function assignTask(taskId: string, value: string) {
     const supabase = createClient();
-    const { error } = await supabase
-      .from("tasks")
-      .update({ assignee_id: assigneeId || null })
-      .eq("id", taskId);
+    const { error } = await supabase.from("tasks").update(assignmentFields(value)).eq("id", taskId);
     if (error) toast("No se pudo asignar: " + error.message);
   }
 
@@ -66,9 +110,25 @@ export function TasksTab({ project }: { project: Project }) {
     if (error) toast("No se pudo eliminar: " + error.message);
   }
 
+  function assigneeOptions(current?: string | null) {
+    // Incluye al asignado actual aunque ya no esté en el proyecto
+    const ids = current && !assignable.includes(current) ? [current, ...assignable] : assignable;
+    return (
+      <>
+        <option value="">Sin asignar</option>
+        <option value={CLIENT}>🏢 {clientLabel}</option>
+        {ids.map((a) => (
+          <option key={a} value={a}>
+            {nameFor(a)}
+          </option>
+        ))}
+      </>
+    );
+  }
+
   return (
     <div className="card pad">
-      <div className="row" style={{ gap: 8, marginBottom: 16 }}>
+      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
         <input
           type="text"
           placeholder="Nueva tarea…"
@@ -95,36 +155,46 @@ export function TasksTab({ project }: { project: Project }) {
             background: "var(--surface)",
             color: "var(--ink)",
             fontSize: 13,
-            maxWidth: 150,
+            maxWidth: 170,
           }}
         >
-          <option value="">Sin asignar</option>
-          {assignable.map((a) => (
-            <option key={a} value={a}>
-              {nameFor(a)}
-            </option>
-          ))}
+          {assigneeOptions()}
         </select>
         <button className="btn btn-primary" onClick={addTask} disabled={adding}>
           Añadir
         </button>
       </div>
 
+      {all.length > 0 && (
+        <div className="task-filters">
+          {filters.map((f) => {
+            const n = pendingCount(f.key);
+            return (
+              <button
+                key={f.key}
+                className={"task-filter" + (filter === f.key ? " active" : "") + (f.key === "client" ? " is-client" : "")}
+                onClick={() => setFilter(f.key)}
+              >
+                {f.label}
+                {n > 0 && <span>{n}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {loading ? (
         <div className="empty">Cargando…</div>
-      ) : list.length === 0 ? (
+      ) : all.length === 0 ? (
         <div className="empty">No hay tareas todavía.</div>
+      ) : list.length === 0 ? (
+        <div className="empty">No hay tareas con este filtro.</div>
       ) : (
         list.map((t) => {
-          const canToggle = isStaff || t.assignee_id === me.id;
+          const canToggle = isStaff || t.assignee_id === me.id || (t.assigned_to_client && t.created_by === me.id);
           const canDelete = isStaff || t.created_by === me.id;
           // Igual que la política RLS de tasks: staff, asignado o creador
           const canAssign = isStaff || t.assignee_id === me.id || t.created_by === me.id;
-          // Incluye al asignado actual aunque ya no esté en el proyecto
-          const options =
-            t.assignee_id && !assignable.includes(t.assignee_id)
-              ? [t.assignee_id, ...assignable]
-              : assignable;
           return (
             <div className="task-row" key={t.id}>
               <button
@@ -136,22 +206,19 @@ export function TasksTab({ project }: { project: Project }) {
               </button>
               <div className={"task-title" + (t.done ? " done" : "")}>{t.title}</div>
               {canAssign ? (
-                <div className="task-assignee">
+                <div className={"task-assignee" + (t.assigned_to_client ? " is-client" : "")}>
                   {t.assignee_id && <Avatar id={t.assignee_id} name={nameFor(t.assignee_id)} size={19} />}
                   <select
                     className="task-assign-select"
-                    value={t.assignee_id || ""}
+                    value={assignmentValue(t)}
                     onChange={(e) => assignTask(t.id, e.target.value)}
                     title="Asignar a…"
                   >
-                    <option value="">Sin asignar</option>
-                    {options.map((a) => (
-                      <option key={a} value={a}>
-                        {nameFor(a)}
-                      </option>
-                    ))}
+                    {assigneeOptions(t.assignee_id)}
                   </select>
                 </div>
+              ) : t.assigned_to_client ? (
+                <div className="task-assignee is-client">🏢 {clientLabel}</div>
               ) : t.assignee_id ? (
                 <div className="task-assignee">
                   <Avatar id={t.assignee_id} name={nameFor(t.assignee_id)} size={19} />

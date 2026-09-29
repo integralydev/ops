@@ -38,7 +38,7 @@ export default function ProjectsPage() {
   const { isStaff } = useAppData();
   const { projects, loading } = useProjects();
   const [showNew, setShowNew] = useState(false);
-  const [pendingTasks, setPendingTasks] = useState<Record<string, number>>({});
+  const [pendingTasks, setPendingTasks] = useState<Record<string, { team: number; client: number }>>({});
   const [lastUpdates, setLastUpdates] = useState<
     Record<string, { author_id: string | null; text: string; created_at: string }>
   >({});
@@ -52,11 +52,15 @@ export default function ProjectsPage() {
     const supabase = createClient();
     supabase
       .from("tasks")
-      .select("project_id")
+      .select("project_id, assigned_to_client")
       .eq("done", false)
       .then(({ data }) => {
-        const counts: Record<string, number> = {};
-        (data || []).forEach((t) => (counts[t.project_id] = (counts[t.project_id] || 0) + 1));
+        const counts: Record<string, { team: number; client: number }> = {};
+        (data || []).forEach((t) => {
+          const c = (counts[t.project_id] ||= { team: 0, client: 0 });
+          if (t.assigned_to_client) c.client++;
+          else c.team++;
+        });
         setPendingTasks(counts);
       });
     // Última actualización de cada proyecto (la más reciente de la tabla notes)
