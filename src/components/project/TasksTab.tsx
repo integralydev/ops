@@ -7,6 +7,7 @@ import { useTasks } from "@/lib/hooks/useProjectDetail";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import type { Project, Task } from "@/lib/database.types";
+import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 
 // Valor especial del desplegable de asignación: la tarea está en manos del cliente
 const CLIENT = "__client";
@@ -75,18 +76,24 @@ export function TasksTab({ project }: { project: Project }) {
     if (!title.trim()) return;
     setAdding(true);
     const supabase = createClient();
-    const { error } = await supabase.from("tasks").insert({
-      project_id: project.id,
-      title: title.trim(),
-      ...assignmentFields(assignee),
-      created_by: me.id,
-    });
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        project_id: project.id,
+        title: title.trim(),
+        ...assignmentFields(assignee),
+        created_by: me.id,
+      })
+      .select("id")
+      .single();
     setAdding(false);
     if (error) {
       toast("No se pudo añadir la tarea: " + error.message);
       return;
     }
     setTitle("");
+    // Aviso por email a la persona asignada (en segundo plano; nunca bloquea)
+    if (data && assignee && assignee !== CLIENT && assignee !== me.id) notifyTaskAssigned(data.id);
   }
 
   async function toggleTask(taskId: string, done: boolean) {
@@ -101,7 +108,11 @@ export function TasksTab({ project }: { project: Project }) {
   async function assignTask(taskId: string, value: string) {
     const supabase = createClient();
     const { error } = await supabase.from("tasks").update(assignmentFields(value)).eq("id", taskId);
-    if (error) toast("No se pudo asignar: " + error.message);
+    if (error) {
+      toast("No se pudo asignar: " + error.message);
+      return;
+    }
+    if (value && value !== CLIENT && value !== me.id) notifyTaskAssigned(taskId);
   }
 
   async function deleteTask(taskId: string) {

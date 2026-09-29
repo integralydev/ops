@@ -23,9 +23,9 @@ function NavItem({
   const pathname = usePathname();
   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
   return (
-    <Link href={href} className={"nav-item" + (active ? " active" : "")} onClick={onNavigate}>
+    <Link href={href} className={"nav-item" + (active ? " active" : "")} onClick={onNavigate} title={label}>
       <span className="nav-icon">{icon}</span>
-      {label}
+      <span className="nav-label">{label}</span>
     </Link>
   );
 }
@@ -45,6 +45,18 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     } catch {}
   }
 
+  // Menú lateral plegado/desplegado: se guarda en <html data-sidebar> (el CSS
+  // hace el resto) y en localStorage; layout.tsx lo aplica antes de pintar.
+  function toggleSidebar() {
+    const root = document.documentElement;
+    const collapsed = root.dataset.sidebar !== "collapsed";
+    if (collapsed) root.dataset.sidebar = "collapsed";
+    else delete root.dataset.sidebar;
+    try {
+      localStorage.setItem("sidebar", collapsed ? "collapsed" : "expanded");
+    } catch {}
+  }
+
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -61,6 +73,10 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-integraly-dark.png" alt="Integraly" className="brand-logo theme-dark-only" />
           <div className="brand-sub" style={{ marginTop: 0 }}>Ops</div>
+          <button className="sidebar-toggle" onClick={toggleSidebar} title="Plegar / desplegar el menú" aria-label="Plegar o desplegar el menú">
+            <span className="when-expanded">‹</span>
+            <span className="when-collapsed">›</span>
+          </button>
         </div>
         <div className="nav-section">General</div>
         <NavItem href="/dashboard" icon="🏠" label="Inicio" onNavigate={() => setOpen(false)} />
@@ -73,21 +89,21 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </>
         )}
         <div className="sidebar-foot">
-          <button className="nav-item" onClick={toggleTheme}>
+          <button className="nav-item" onClick={toggleTheme} title="Modo claro / oscuro">
             <span className="nav-icon">
               <span className="theme-light-only">☾</span>
               <span className="theme-dark-only">☀</span>
             </span>
-            <span className="theme-light-only">Modo oscuro</span>
-            <span className="theme-dark-only">Modo claro</span>
+            <span className="theme-light-only nav-label">Modo oscuro</span>
+            <span className="theme-dark-only nav-label">Modo claro</span>
           </button>
-          <Link href="/set-password" className="nav-item" onClick={() => setOpen(false)}>
+          <Link href="/set-password" className="nav-item" onClick={() => setOpen(false)} title="Contraseña">
             <span className="nav-icon">🔑</span>
-            Contraseña
+            <span className="nav-label">Contraseña</span>
           </Link>
           <div className="me-row">
             <Avatar id={me.id} name={me.full_name} size={30} />
-            <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="me-info" style={{ minWidth: 0, flex: 1 }}>
               <div className="me-name">{me.full_name || "Tú"}</div>
               <div className="me-role">{ROLE_LABELS[me.role]}</div>
             </div>
