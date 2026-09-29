@@ -87,6 +87,29 @@ export interface Note {
   created_at: string;
 }
 
+export type ActivityKind =
+  | "project_created"
+  | "status_changed"
+  | "owner_changed"
+  | "developer_added"
+  | "demo_link"
+  | "notes_edited"
+  | "next_step"
+  | "task_created"
+  | "task_done"
+  | "file_uploaded"
+  | "update_posted";
+
+// Registro de actividad: lo rellenan triggers de la base de datos
+export interface Activity {
+  id: string;
+  project_id: string;
+  actor_id: string | null;
+  kind: ActivityKind;
+  data: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
