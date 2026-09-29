@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
-import { useTasks } from "@/lib/hooks/useProjectDetail";
+import { useFiles, useTasks } from "@/lib/hooks/useProjectDetail";
+import { openProjectFile, uploadProjectFile } from "@/lib/uploads";
+import { fileGlyph } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import type { Project, Task } from "@/lib/database.types";
@@ -26,17 +28,40 @@ function assignmentValue(t: Task) {
 }
 
 export function TasksTab({ project }: { project: Project }) {
-  const { me, isStaff, nameFor, clients } = useAppData();
+  const { me, isStaff, nameFor, clients, team } = useAppData();
   const { rows: tasks, loading } = useTasks(project.id);
   const [title, setTitle] = useState("");
   const [assignee, setAssignee] = useState("");
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [attachingId, setAttachingId] = useState<string | null>(null);
+  const { rows: files } = useFiles(project.id);
+
+  // Archivos adjuntos a cada tarea
+  const filesByTask: Record<string, typeof files[string][]> = {};
+  Object.values(files).forEach((f) => {
+    if (f.task_id) (filesByTask[f.task_id] ||= []).push(f);
+  });
+
+  async function attachFiles(taskId: string, picked: File[]) {
+    if (!picked.length) return;
+    setAttachingId(taskId);
+    for (const file of picked) {
+      const err = await uploadProjectFile(project.id, file, me.id, taskId);
+      if (err) toast(err);
+    }
+    setAttachingId(null);
+  }
 
   const client = project.client_id ? clients[project.client_id] : null;
   const clientLabel = client ? client.name : "Cliente";
 
-  const assignable = [project.owner_id, ...(project.developer_ids || [])].filter(
+  // Encargado, developers del proyecto y siempre admins/directores (ven todos los proyectos)
+  const staffIds = Object.values(team)
+    .filter((t) => t.role === "admin" || t.role === "director")
+    .map((t) => t.id);
+  const assignable = [project.owner_id, ...(project.developer_ids || []), ...staffIds].filter(
     (v, i, arr): v is string => !!v && arr.indexOf(v) === i,
   );
 
@@ -92,6 +117,11 @@ export function TasksTab({ project }: { project: Project }) {
       return;
     }
     setTitle("");
+    if (data && newFiles.length) {
+      const pending = newFiles;
+      setNewFiles([]);
+      attachFiles(data.id, pending);
+    }
     // Aviso por email a la persona asignada (en segundo plano; nunca bloquea)
     if (data && assignee && assignee !== CLIENT && assignee !== me.id) notifyTaskAssigned(data.id);
   }
@@ -171,10 +201,35 @@ export function TasksTab({ project }: { project: Project }) {
         >
           {assigneeOptions()}
         </select>
+        <label className="btn" title="Adjuntar archivos a la nueva tarea" style={{ cursor: "pointer" }}>
+          📎{newFiles.length ? ` ${newFiles.length}` : ""}
+          <input
+            type="file"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const picked = Array.from(e.target.files || []);
+              e.target.value = "";
+              setNewFiles((prev) => [...prev, ...picked]);
+            }}
+          />
+        </label>
         <button className="btn btn-primary" onClick={addTask} disabled={adding}>
           Añadir
         </button>
       </div>
+      {newFiles.length > 0 && (
+        <div className="task-files" style={{ margin: "-6px 0 14px" }}>
+          {newFiles.map((f, i) => (
+            <span key={i} className="task-file">
+              {fileGlyph(f.type)} {f.name}
+              <button title="Quitar" onClick={() => setNewFiles((prev) => prev.filter((_, j) => j !== i))}>
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {all.length > 0 && (
         <div className="task-filters">
@@ -215,7 +270,39 @@ export function TasksTab({ project }: { project: Project }) {
               >
                 {t.done ? "✓" : ""}
               </button>
-              <div className={"task-title" + (t.done ? " done" : "")}>{t.title}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className={"task-title" + (t.done ? " done" : "")}>{t.title}</div>
+                {filesByTask[t.id]?.length ? (
+                  <div className="task-files">
+                    {filesByTask[t.id].map((f) => (
+                      <button
+                        key={f.id}
+                        className="task-file"
+                        title="Abrir"
+                        onClick={async () => {
+                          if (!(await openProjectFile(f.storage_path))) toast("No se pudo abrir el archivo");
+                        }}
+                      >
+                        {fileGlyph(f.content_type)} {f.filename}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <label className="icon-btn" title="Adjuntar archivo a esta tarea" style={{ cursor: "pointer" }}>
+                {attachingId === t.id ? "…" : "📎"}
+                <input
+                  type="file"
+                  multiple
+                  style={{ display: "none" }}
+                  disabled={attachingId === t.id}
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files || []);
+                    e.target.value = "";
+                    attachFiles(t.id, picked);
+                  }}
+                />
+              </label>
               {canAssign ? (
                 <div className={"task-assignee" + (t.assigned_to_client ? " is-client" : "")}>
                   {t.assignee_id && <Avatar id={t.assignee_id} name={nameFor(t.assignee_id)} size={19} />}

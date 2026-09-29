@@ -76,6 +76,7 @@ export interface FileRow {
   size_bytes: number | null;
   uploaded_by: string | null;
   uploaded_at: string;
+  task_id: string | null;
 }
 
 export interface Note {

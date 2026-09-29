@@ -2,17 +2,17 @@
 
 import { useRef, useState } from "react";
 import { useAppData } from "@/components/app-data";
-import { useFiles } from "@/lib/hooks/useProjectDetail";
+import { useFiles, useTasks } from "@/lib/hooks/useProjectDetail";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { fileGlyph, fmtDate, fmtSize } from "@/lib/format";
+import { FILES_BUCKET as BUCKET, openProjectFile, uploadProjectFile } from "@/lib/uploads";
 import type { Project } from "@/lib/database.types";
-
-const BUCKET = "project-files";
 
 export function FilesTab({ project }: { project: Project }) {
   const { me, isStaff, nameFor } = useAppData();
   const { rows: files, loading } = useFiles(project.id);
+  const { rows: tasks } = useTasks(project.id);
   const [uploading, setUploading] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -22,46 +22,25 @@ export function FilesTab({ project }: { project: Project }) {
   );
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const picked = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file) return;
+    if (!picked.length) return;
     setUploading(true);
-    const supabase = createClient();
-    const path = `${project.id}/${crypto.randomUUID()}-${file.name}`;
-    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file);
-    if (upErr) {
-      setUploading(false);
-      toast("No se pudo subir el archivo: " + upErr.message);
-      return;
+    let ok = 0;
+    for (const file of picked) {
+      const err = await uploadProjectFile(project.id, file, me.id);
+      if (err) toast(err);
+      else ok++;
     }
-    const { error: insErr } = await supabase.from("files").insert({
-      project_id: project.id,
-      storage_path: path,
-      filename: file.name,
-      content_type: file.type || null,
-      size_bytes: file.size,
-      uploaded_by: me.id,
-    });
     setUploading(false);
-    if (insErr) {
-      toast("Archivo subido, pero no se pudo registrar: " + insErr.message);
-      return;
-    }
-    toast("Archivo subido");
+    if (ok) toast(ok === 1 ? "Archivo subido" : `${ok} archivos subidos`);
   }
 
   async function openFile(fileId: string, storagePath: string) {
     setOpeningId(fileId);
-    const supabase = createClient();
-    const { data, error } = await supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(storagePath, 60);
+    const ok = await openProjectFile(storagePath);
     setOpeningId(null);
-    if (error || !data) {
-      toast("No se pudo abrir el archivo");
-      return;
-    }
-    window.open(data.signedUrl, "_blank", "noopener");
+    if (!ok) toast("No se pudo abrir el archivo");
   }
 
   async function deleteFile(fileId: string, storagePath: string) {
@@ -80,6 +59,7 @@ export function FilesTab({ project }: { project: Project }) {
           <input
             ref={inputRef}
             type="file"
+            multiple
             style={{ display: "none" }}
             onChange={handleUpload}
             disabled={uploading}
@@ -102,6 +82,7 @@ export function FilesTab({ project }: { project: Project }) {
                 <div className="file-meta">
                   {fmtSize(f.size_bytes)} · subido por {nameFor(f.uploaded_by)} ·{" "}
                   {fmtDate(f.uploaded_at)}
+                  {f.task_id && tasks[f.task_id] && <> · 📋 tarea «{tasks[f.task_id].title}»</>}
                 </div>
               </div>
               <button

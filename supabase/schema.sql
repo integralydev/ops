@@ -81,6 +81,8 @@ create table if not exists files (
   uploaded_at timestamptz not null default now()
 );
 create index if not exists files_project_id_idx on files (project_id);
+alter table files add column if not exists task_id uuid references tasks (id) on delete set null;
+create index if not exists files_task_id_idx on files (task_id);
 
 -- ---------------------------------------------------------------------------
 -- Tabla: notes (comentarios/actividad por proyecto)

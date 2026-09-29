@@ -261,6 +261,10 @@ button{font-family:inherit;}
 .task-assignee{display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ink-faint);}
 .task-assignee.is-client{background:var(--warning-soft); color:var(--warning); border-radius:99px; padding:1px 4px 1px 8px; font-weight:600;}
 .task-assignee.is-client .task-assign-select{color:var(--warning); font-weight:600;}
+.task-files{display:flex; flex-wrap:wrap; gap:6px; margin-top:5px;}
+.task-file{display:inline-flex; align-items:center; gap:5px; max-width:260px; padding:3px 9px; border-radius:7px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-soft); font-size:12px; font-family:inherit; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.task-file:hover{border-color:var(--accent); color:var(--ink);}
+.task-file button{border:none; background:none; color:var(--ink-faint); cursor:pointer; padding:0 0 0 2px; font-size:11px;}
 .task-filters{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; padding-bottom:12px; border-bottom:1px solid var(--border);}
 .task-filter{display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:99px; border:1px solid var(--border); background:var(--surface); color:var(--ink-soft); font-size:12.4px; font-weight:600; cursor:pointer; font-family:inherit;}
 .task-filter:hover{border-color:var(--ink-faint); color:var(--ink);}
