@@ -49,8 +49,7 @@ button{font-family:inherit;}
 .brand{display:flex; align-items:center; gap:10px; padding:8px 10px 22px;}
 .brand-logo{height:17px; width:auto; display:block;}
 .sidebar{transition:width .18s ease, flex-basis .18s ease, padding .18s ease;}
-.sidebar-toggle{margin-left:auto; width:26px; height:26px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--ink-faint); font-size:15px; line-height:1; cursor:pointer; font-family:inherit;}
-.sidebar-toggle:hover{color:var(--ink); border-color:var(--ink-faint);}
+.sidebar-toggle .nav-icon{font-size:16px; line-height:1;}
 .sidebar-toggle .when-collapsed{display:none;}
 /* Menú plegado (solo escritorio): barra estrecha con iconos */
 @media (min-width:821px){
@@ -60,7 +59,6 @@ button{font-family:inherit;}
   :root[data-sidebar="collapsed"] .brand-sub,
   :root[data-sidebar="collapsed"] .nav-label,
   :root[data-sidebar="collapsed"] .me-info{display:none !important;}
-  :root[data-sidebar="collapsed"] .sidebar-toggle{margin-left:0;}
   :root[data-sidebar="collapsed"] .sidebar-toggle .when-expanded{display:none;}
   :root[data-sidebar="collapsed"] .sidebar-toggle .when-collapsed{display:inline;}
   :root[data-sidebar="collapsed"] .nav-section{font-size:0; height:1px; padding:0; margin:12px 8px; background:var(--border);}

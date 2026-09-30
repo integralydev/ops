@@ -73,10 +73,6 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-integraly-dark.png" alt="Integraly" className="brand-logo theme-dark-only" />
           <div className="brand-sub" style={{ marginTop: 0 }}>Ops</div>
-          <button className="sidebar-toggle" onClick={toggleSidebar} title="Plegar / desplegar el menú" aria-label="Plegar o desplegar el menú">
-            <span className="when-expanded">‹</span>
-            <span className="when-collapsed">›</span>
-          </button>
         </div>
         <div className="nav-section">General</div>
         <NavItem href="/dashboard" icon="🏠" label="Inicio" onNavigate={() => setOpen(false)} />
@@ -89,6 +85,13 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </>
         )}
         <div className="sidebar-foot">
+          <button className="nav-item sidebar-toggle" onClick={toggleSidebar} title="Plegar / desplegar el menú">
+            <span className="nav-icon">
+              <span className="when-expanded">«</span>
+              <span className="when-collapsed">»</span>
+            </span>
+            <span className="nav-label">Plegar menú</span>
+          </button>
           <button className="nav-item" onClick={toggleTheme} title="Modo claro / oscuro">
             <span className="nav-icon">
               <span className="theme-light-only">☾</span>
