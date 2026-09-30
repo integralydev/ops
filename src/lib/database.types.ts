@@ -50,6 +50,9 @@ export interface Project {
   notes_doc: string | null;
   notes_updated_at: string | null;
   notes_updated_by: string | null;
+  scope_closed_at: string | null;
+  scope_closed_by: string | null;
+  scope_source_file_id: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -86,6 +89,22 @@ export interface Note {
   text: string;
   image_paths: string[] | null;
   created_at: string;
+}
+
+export type ScopeStatus = "incluido" | "excluido" | "por_decidir";
+
+// Punto del scope de un proyecto. Sin importes a propósito.
+export interface ScopeItem {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  status: ScopeStatus;
+  block: string;
+  is_extension: boolean;
+  position: number;
+  created_at: string;
+  created_by: string | null;
 }
 
 export type ActivityKind =

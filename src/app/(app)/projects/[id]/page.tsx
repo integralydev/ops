@@ -8,10 +8,12 @@ import { ResumenTab } from "@/components/project/ResumenTab";
 import { TasksTab } from "@/components/project/TasksTab";
 import { FilesTab } from "@/components/project/FilesTab";
 import { NotesTab } from "@/components/project/NotesTab";
+import { ScopeTab } from "@/components/project/ScopeTab";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 
 const TABS = [
   ["resumen", "Resumen"],
+  ["scope", "Scope"],
   ["tareas", "Tareas"],
   ["archivos", "Archivos"],
   ["actualizaciones", "Actualizaciones"],
@@ -82,7 +84,9 @@ export default function ProjectDetailPage() {
             </button>
           ))}
         </div>
-        {tab === "tareas" ? (
+        {tab === "scope" ? (
+          <ScopeTab project={project} />
+        ) : tab === "tareas" ? (
           <TasksTab project={project} />
         ) : tab === "archivos" ? (
           <FilesTab project={project} />

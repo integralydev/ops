@@ -263,6 +263,30 @@ button{font-family:inherit;}
 .task-file{display:inline-flex; align-items:center; gap:5px; max-width:260px; padding:3px 9px; border-radius:7px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-soft); font-size:12px; font-family:inherit; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .task-file:hover{border-color:var(--accent); color:var(--ink);}
 .task-file button{border:none; background:none; color:var(--ink-faint); cursor:pointer; padding:0 0 0 2px; font-size:11px;}
+/* ---------- Scope ---------- */
+.scope-banner{padding:14px 18px; font-size:13.4px; color:var(--ink-soft);}
+.scope-banner b{color:var(--ink);}
+.scope-banner.is-closed{border-color:var(--success-soft); background:var(--success-soft);}
+.scope-search{flex:1; min-width:220px; padding:9px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); font-size:13.6px; font-family:inherit;}
+.scope-select{padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); font-size:12.6px; font-family:inherit; max-width:240px;}
+.scope-form{border:1px solid var(--border); background:var(--surface-2); border-radius:10px; padding:14px; margin-bottom:14px;}
+.scope-form .field input[type=text], .scope-form .field textarea{background:var(--surface);}
+.scope-preview{border:1px dashed var(--border); border-radius:8px; padding:10px 12px; margin-bottom:12px; background:var(--surface);}
+.scope-preview-row{font-size:12.8px; padding:2px 0; color:var(--ink-soft);}
+.scope-block + .scope-block{margin-top:16px;}
+.scope-block-title{font-size:11px; text-transform:uppercase; letter-spacing:.1em; font-weight:700; color:var(--ink-faint); padding:4px 4px 6px;}
+.scope-item{display:flex; align-items:flex-start; gap:11px; padding:10px 4px; border-bottom:1px solid var(--border);}
+.scope-item:last-child{border-bottom:none;}
+.scope-item.is-excluido .scope-title{color:var(--ink-faint); text-decoration:line-through; text-decoration-color:var(--border);}
+.scope-status{flex:0 0 auto; min-width:128px; font-size:12px; font-weight:600; padding:3px 8px; border-radius:99px; border:1px solid transparent; font-family:inherit; cursor:pointer;}
+span.scope-status{cursor:default; display:inline-block;}
+.scope-status.is-incluido{background:var(--success-soft); color:var(--success);}
+.scope-status.is-excluido{background:var(--danger-soft); color:var(--danger);}
+.scope-status.is-por_decidir{background:var(--warning-soft); color:var(--warning);}
+.scope-title{font-size:13.8px; font-weight:600; color:var(--ink);}
+.scope-desc{font-size:12.8px; color:var(--ink-soft); margin-top:2px; white-space:pre-wrap;}
+.scope-ext{display:inline-block; margin-left:8px; padding:1px 7px; border-radius:99px; background:var(--accent-soft); color:var(--accent-dim); font-size:11px; font-weight:600; text-decoration:none;}
+
 .task-filters{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; padding-bottom:12px; border-bottom:1px solid var(--border);}
 .task-filter{display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:99px; border:1px solid var(--border); background:var(--surface); color:var(--ink-soft); font-size:12.4px; font-weight:600; cursor:pointer; font-family:inherit;}
 .task-filter:hover{border-color:var(--ink-faint); color:var(--ink);}
