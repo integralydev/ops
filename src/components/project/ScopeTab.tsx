@@ -6,8 +6,9 @@ import { useFiles, useScope } from "@/lib/hooks/useProjectDetail";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { fmtDate } from "@/lib/format";
-import { openProjectFile } from "@/lib/uploads";
-import type { Project, ScopeItem, ScopeStatus } from "@/lib/database.types";
+import type { FileRow, Project, ScopeItem, ScopeStatus } from "@/lib/database.types";
+import { openProjectFile, uploadProjectFile } from "@/lib/uploads";
+import { extractScopeFromFile, type ExtractedScopeItem } from "@/app/(app)/projects/scope-actions";
 
 const STATUSES: { value: ScopeStatus; label: string; icon: string }[] = [
   { value: "incluido", label: "Incluido", icon: "✅" },
@@ -142,7 +143,7 @@ export function ScopeTab({ project }: { project: Project }) {
           {isStaff && (
             <>
               <button className="btn" onClick={() => { setShowImport((v) => !v); setShowAdd(false); }}>
-                📄 Importar texto del PDF
+                ✨ Importar desde PDF
               </button>
               <button className="btn btn-primary" onClick={() => { setShowAdd((v) => !v); setShowImport(false); }}>
                 + Añadir punto
@@ -168,6 +169,9 @@ export function ScopeTab({ project }: { project: Project }) {
 
         {showImport && (
           <ImportBox
+            projectId={project.id}
+            userId={me.id}
+            files={Object.values(files)}
             closed={closed}
             onCancel={() => setShowImport(false)}
             onImport={async (parsed) => {
@@ -214,7 +218,7 @@ export function ScopeTab({ project }: { project: Project }) {
         ) : items.length === 0 ? (
           <div className="empty">
             {isStaff
-              ? "Todavía no hay scope. Añade puntos o importa el apartado de alcance del PDF del presupuesto."
+              ? "Todavía no hay scope. Pulsa «✨ Importar desde PDF», elige el presupuesto y la IA sacará los puntos para que los revises."
               : "Todavía no se ha definido el scope de este proyecto."}
           </div>
         ) : visible.length === 0 ? (
@@ -311,7 +315,7 @@ function CloseScope({
       {canEdit && (
         <div className="row" style={{ gap: 8 }}>
           <select className="scope-select" value={fileId} onChange={(e) => setFileId(e.target.value)} title="PDF del presupuesto aceptado">
-            <option value="">Sin PDF de referencia</option>
+            <option value="">PDF del presupuesto aceptado (opcional)</option>
             {pdfsFirst.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.filename}
@@ -397,58 +401,155 @@ function ItemForm({
 }
 
 function ImportBox({
+  projectId,
+  userId,
+  files,
   closed,
   onImport,
   onCancel,
 }: {
+  projectId: string;
+  userId: string;
+  files: FileRow[];
   closed: boolean;
-  onImport: (items: { title: string; block: string; status: ScopeStatus }[]) => Promise<unknown>;
+  onImport: (items: { title: string; description?: string; block: string; status: ScopeStatus }[]) => Promise<unknown>;
   onCancel: () => void;
 }) {
+  const pdfs = files
+    .filter((f) => f.content_type === "application/pdf" || f.filename.toLowerCase().endsWith(".pdf"))
+    .sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at));
+  const [mode, setMode] = useState<"pdf" | "text">("pdf");
+  const [fileId, setFileId] = useState(pdfs[0]?.id || "");
   const [text, setText] = useState("");
+  const [reading, setReading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [extracted, setExtracted] = useState<ExtractedScopeItem[] | null>(null);
   const [saving, setSaving] = useState(false);
-  const parsed = parseScopeText(text);
+
+  const preview = mode === "pdf" ? extracted || [] : parseScopeText(text);
+
+  async function readPdf(id = fileId) {
+    if (!id) return toast("Elige un PDF");
+    setReading(true);
+    setExtracted(null);
+    const res = await extractScopeFromFile(id);
+    setReading(false);
+    if (res.error) return toast(res.error);
+    setExtracted(res.items || []);
+  }
+
+  async function uploadPdf(file: File) {
+    setUploading(true);
+    const err = await uploadProjectFile(projectId, file, userId);
+    setUploading(false);
+    if (err) return toast(err);
+    // Se elige solo cuando llegue por realtime; mientras tanto avisamos
+    toast("PDF subido. Elígelo en la lista y pulsa «Leer PDF».");
+  }
 
   return (
     <div className="scope-form">
-      <div className="field">
-        <label>Pega aquí el apartado de alcance del PDF</label>
-        <textarea
-          rows={8}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={"Cada línea será un punto. Las líneas que acaban en «:» o están en MAYÚSCULAS se usan como bloque.\nUn bloque tipo «Fuera de alcance:» marca sus puntos como excluidos.\n\nMÓDULO RESERVAS\n- Calendario de citas\n- Recordatorios por email\nFuera de alcance:\n- App móvil nativa"}
-          autoFocus
-        />
+      <div className="seg" style={{ marginBottom: 12 }}>
+        <button className={mode === "pdf" ? "active" : ""} onClick={() => setMode("pdf")}>
+          Leer un PDF
+        </button>
+        <button className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>
+          Pegar texto
+        </button>
       </div>
-      {parsed.length > 0 && (
-        <div className="scope-preview">
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-            Vista previa · {parsed.length} puntos{closed ? " (se marcarán como ampliación)" : ""}. Después puedes ajustar cada uno.
+
+      {mode === "pdf" ? (
+        <>
+          <div className="muted" style={{ fontSize: 12.6, marginBottom: 8 }}>
+            Elige el PDF del presupuesto o propuesta (de la pestaña Archivos). La IA lee el documento, saca solo las
+            funcionalidades del alcance —sin importes— y te las enseña para revisarlas antes de guardar.
           </div>
-          {parsed.slice(0, 12).map((p, i) => (
-            <div key={i} className="scope-preview-row">
-              {statusOf(p.status).icon} {p.block && <span className="muted">{p.block} · </span>}
-              {p.title}
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <select className="scope-select" style={{ flex: 1, maxWidth: "none" }} value={fileId} onChange={(e) => { setFileId(e.target.value); setExtracted(null); }}>
+              {pdfs.length === 0 && <option value="">No hay PDFs en este proyecto</option>}
+              {pdfs.map((f) => (
+                <option key={f.id} value={f.id}>
+                  📕 {f.filename}
+                </option>
+              ))}
+            </select>
+            <label className="btn btn-sm" style={{ cursor: "pointer" }}>
+              {uploading ? "Subiendo…" : "📎 Subir PDF"}
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                style={{ display: "none" }}
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) uploadPdf(f);
+                }}
+              />
+            </label>
+            <button className="btn btn-sm btn-primary" onClick={() => readPdf()} disabled={reading || !fileId}>
+              {reading ? "Leyendo el PDF…" : "✨ Leer PDF"}
+            </button>
+          </div>
+          {reading && (
+            <div className="muted" style={{ fontSize: 12.6, marginBottom: 12 }}>
+              Leyendo el documento… puede tardar entre 20 segundos y un minuto.
             </div>
-          ))}
-          {parsed.length > 12 && <div className="muted" style={{ fontSize: 12 }}>… y {parsed.length - 12} más</div>}
+          )}
+        </>
+      ) : (
+        <div className="field">
+          <label>Pega aquí el apartado de alcance</label>
+          <textarea
+            rows={8}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={"Cada línea será un punto. Las líneas que acaban en «:» o están en MAYÚSCULAS se usan como bloque.\nUn bloque tipo «Fuera de alcance:» marca sus puntos como excluidos.\n\nMÓDULO RESERVAS\n- Calendario de citas\n- Recordatorios por email\nFuera de alcance:\n- App móvil nativa"}
+            autoFocus
+          />
         </div>
       )}
+
+      {preview.length > 0 && (
+        <div className="scope-preview">
+          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+            Revisa · {preview.length} puntos{closed ? " (se marcarán como ampliación)" : ""}. Después puedes editar cada uno.
+          </div>
+          {preview.map((p, i) => (
+            <div key={i} className="scope-preview-row">
+              {statusOf(p.status).icon} {p.block && <span className="muted">{p.block} · </span>}
+              <b style={{ color: "var(--ink)", fontWeight: 600 }}>{p.title}</b>
+              {(p as { description?: string }).description ? (
+                <span className="muted"> — {(p as { description?: string }).description}</span>
+              ) : null}
+              {mode === "pdf" && (
+                <button
+                  className="scope-preview-x"
+                  title="Quitar de la importación"
+                  onClick={() => setExtracted((prev) => (prev || []).filter((_, j) => j !== i))}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
         <button className="btn btn-sm" onClick={onCancel} disabled={saving}>
           Cancelar
         </button>
         <button
           className="btn btn-sm btn-primary"
-          disabled={saving || !parsed.length}
+          disabled={saving || !preview.length}
           onClick={async () => {
             setSaving(true);
-            await onImport(parsed);
+            await onImport(preview);
             setSaving(false);
           }}
         >
-          {saving ? "Importando…" : `Importar ${parsed.length || ""} puntos`}
+          {saving ? "Guardando…" : `Guardar ${preview.length || ""} puntos en el scope`}
         </button>
       </div>
     </div>
