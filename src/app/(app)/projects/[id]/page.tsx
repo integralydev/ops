@@ -24,7 +24,7 @@ export default function ProjectDetailPage() {
   const searchParams = useSearchParams();
   const rawTab = searchParams.get("tab") || "resumen";
   const tab = rawTab === "notas" ? "actualizaciones" : rawTab; // enlaces antiguos
-  const { isStaff } = useAppData();
+  const { isStaff, clients } = useAppData();
   const project = useProject(projectId);
   const [showEdit, setShowEdit] = useState(false);
 
@@ -51,7 +51,11 @@ export default function ProjectDetailPage() {
     <>
       <div className="topbar">
         <div>
-          <h1>{project.name}</h1>
+          {/* El cliente es lo que se busca: va como título; el proyecto, debajo */}
+          <h1>{project.client_id && clients[project.client_id] ? clients[project.client_id].name : project.name}</h1>
+          <div className="topbar-sub">
+            {project.client_id && clients[project.client_id] ? project.name : "Sin cliente"}
+          </div>
         </div>
         <div className="row" style={{ gap: 8 }}>
           {project.demo_url && (
