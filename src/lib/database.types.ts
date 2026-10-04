@@ -89,6 +89,7 @@ export interface Note {
   text: string;
   image_paths: string[] | null;
   created_at: string;
+  edited_at: string | null;
 }
 
 export type ScopeStatus = "incluido" | "excluido" | "por_decidir";

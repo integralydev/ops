@@ -93,7 +93,8 @@ create table if not exists notes (
   author_id uuid references auth.users (id),
   text text not null,
   image_paths text[] not null default '{}',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  edited_at timestamptz
 );
 create index if not exists notes_project_id_idx on notes (project_id);
 
@@ -279,6 +280,9 @@ create policy "files_delete_owner" on files for delete to authenticated
 -- notes
 create policy "notes_select_member" on notes for select to authenticated using (is_project_member(project_id));
 create policy "notes_insert_member" on notes for insert to authenticated with check (is_project_member(project_id));
+create policy "notes_update_author" on notes for update to authenticated
+  using (author_id = auth.uid() or is_staff())
+  with check ((author_id = auth.uid() or is_staff()) and is_project_member(project_id));
 create policy "notes_delete_owner" on notes for delete to authenticated
   using (is_staff());
 

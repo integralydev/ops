@@ -67,20 +67,30 @@ function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "
         setLoading(false);
       });
 
+    // Supabase no entrega los DELETE a una suscripción con filtro (y con RLS
+    // el registro borrado solo trae el id), así que se escuchan sin filtro y
+    // se descartan los ids que no son de este proyecto.
     const channel = supabase
       .channel(`${table}-${projectId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table, filter: `project_id=eq.${projectId}` },
-        (payload) => {
-          setRows((prev) => {
-            const next = { ...prev };
-            if (payload.eventType === "DELETE") delete next[(payload.old as T).id];
-            else next[(payload.new as T).id] = payload.new as T;
-            return next;
-          });
-        },
+        { event: "INSERT", schema: "public", table, filter: `project_id=eq.${projectId}` },
+        (payload) => setRows((prev) => ({ ...prev, [(payload.new as T).id]: payload.new as T })),
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table, filter: `project_id=eq.${projectId}` },
+        (payload) => setRows((prev) => ({ ...prev, [(payload.new as T).id]: payload.new as T })),
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table }, (payload) => {
+        const id = (payload.old as Partial<T>).id;
+        setRows((prev) => {
+          if (!id || !(id in prev)) return prev;
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      })
       .subscribe();
 
     return () => {
@@ -89,7 +99,16 @@ function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "
     };
   }, [table, projectId, orderCol, supabase]);
 
-  return { rows, loading };
+  // Para reflejar al momento un cambio propio sin esperar a Realtime.
+  const removeLocal = (id: string) =>
+    setRows((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  const upsertLocal = (row: T) => setRows((prev) => ({ ...prev, [row.id]: row }));
+
+  return { rows, loading, removeLocal, upsertLocal };
 }
 
 export function useTasks(projectId: string) {

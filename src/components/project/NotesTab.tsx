@@ -8,13 +8,17 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { fmtDateTime, fmtRelative } from "@/lib/format";
 import { UPDATES_BUCKET, UpdateImages } from "@/components/project/UpdateImages";
-import type { Project } from "@/lib/database.types";
+import type { Note, Project } from "@/lib/database.types";
 
 // Pestaña "Actualizaciones": bitácora con fecha de lo que se va haciendo en el
-// proyecto (tabla notes), con capturas adjuntas. Solo admin/director borran.
+// proyecto (tabla notes), con capturas adjuntas. Edita el autor o
+// admin/director; solo admin/director borran.
 export function NotesTab({ project }: { project: Project }) {
   const { me, isStaff, nameFor } = useAppData();
-  const { rows: notes, loading } = useNotes(project.id);
+  const { rows: notes, loading, removeLocal, upsertLocal } = useNotes(project.id);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
   const [text, setText] = useState("");
   const [images, setImages] = useState<{ file: File; url: string }[]>([]);
   const [posting, setPosting] = useState(false);
@@ -82,12 +86,37 @@ export function NotesTab({ project }: { project: Project }) {
   async function remove(id: string, paths: string[]) {
     if (!confirm("¿Borrar esta actualización?")) return;
     const supabase = createClient();
-    const { error } = await supabase.from("notes").delete().eq("id", id);
-    if (error) {
-      toast("No se pudo borrar: " + error.message);
+    // .select() para saber si se borró algo: si RLS lo impide no da error, solo 0 filas.
+    const { data, error } = await supabase.from("notes").delete().eq("id", id).select("id");
+    if (error || !data?.length) {
+      toast("No se pudo borrar" + (error ? ": " + error.message : ": no tienes permiso"));
       return;
     }
+    removeLocal(id);
     if (paths.length) await supabase.storage.from(UPDATES_BUCKET).remove(paths);
+  }
+
+  function startEdit(n: Note) {
+    setEditingId(n.id);
+    setDraft(n.text);
+  }
+
+  async function saveEdit(n: Note) {
+    if (!draft.trim() && !(n.image_paths || []).length) return;
+    setSaving(true);
+    const { data, error } = await createClient()
+      .from("notes")
+      .update({ text: draft.trim(), edited_at: new Date().toISOString() })
+      .eq("id", n.id)
+      .select()
+      .maybeSingle();
+    setSaving(false);
+    if (error || !data) {
+      toast("No se pudo guardar" + (error ? ": " + error.message : ": no tienes permiso"));
+      return;
+    }
+    upsertLocal(data as Note);
+    setEditingId(null);
   }
 
   return (
@@ -147,11 +176,37 @@ export function NotesTab({ project }: { project: Project }) {
                 <span className="note-author">{nameFor(n.author_id)}</span>
                 <span className="note-time" title={fmtDateTime(n.created_at)}>
                   {fmtRelative(n.created_at)} · {fmtDateTime(n.created_at)}
+                  {n.edited_at && <span title={"Editado " + fmtDateTime(n.edited_at)}> · editado</span>}
                 </span>
               </div>
-              {n.text && <div className="note-text">{n.text}</div>}
+              {editingId === n.id ? (
+                <>
+                  <div className="field">
+                    <textarea rows={4} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={() => saveEdit(n)}
+                      disabled={saving || (!draft.trim() && !(n.image_paths || []).length)}
+                    >
+                      {saving ? "Guardando…" : "Guardar"}
+                    </button>
+                    <button className="btn btn-sm" onClick={() => setEditingId(null)} disabled={saving}>
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                n.text && <div className="note-text">{n.text}</div>
+              )}
               <UpdateImages paths={n.image_paths || []} />
             </div>
+            {(isStaff || n.author_id === me.id) && editingId !== n.id && (
+              <button className="icon-btn" title="Editar actualización" onClick={() => startEdit(n)}>
+                ✎
+              </button>
+            )}
             {isStaff && (
               <button className="icon-btn" title="Borrar actualización" onClick={() => remove(n.id, n.image_paths || [])}>
                 ✕
