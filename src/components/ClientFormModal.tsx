@@ -4,7 +4,10 @@ import { useState } from "react";
 import { Modal } from "@/components/Modal";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import type { Client } from "@/lib/database.types";
+import { CLIENT_STATUSES, clientContacts } from "@/lib/format";
+import type { Client, ClientContact, ClientStatus } from "@/lib/database.types";
+
+const emptyContact = (): ClientContact => ({ name: "", role: "", email: "", phone: "" });
 
 export function ClientFormModal({
   client,
@@ -16,11 +19,21 @@ export function ClientFormModal({
   onSaved?: (id: string) => void;
 }) {
   const [name, setName] = useState(client?.name || "");
-  const [contactName, setContactName] = useState(client?.contact_name || "");
-  const [phone, setPhone] = useState(client?.phone || "");
-  const [email, setEmail] = useState(client?.email || "");
+  const [status, setStatus] = useState<ClientStatus>(client?.status || "lead");
+  const [contacts, setContacts] = useState<ClientContact[]>(() => {
+    const list = client ? clientContacts(client) : [];
+    return list.length ? list : [emptyContact()];
+  });
   const [notes, setNotes] = useState(client?.notes || "");
   const [saving, setSaving] = useState(false);
+
+  function setContact(i: number, patch: Partial<ClientContact>) {
+    setContacts((prev) => prev.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  }
+
+  function removeContact(i: number) {
+    setContacts((prev) => prev.filter((_, j) => j !== i));
+  }
 
   async function handleSave() {
     if (!name.trim()) {
@@ -31,9 +44,10 @@ export function ClientFormModal({
     const supabase = createClient();
     const payload = {
       name: name.trim(),
-      contact_name: contactName,
-      phone,
-      email,
+      status,
+      contacts: contacts
+        .map((c) => ({ name: c.name.trim(), role: c.role.trim(), email: c.email.trim(), phone: c.phone.trim() }))
+        .filter((c) => c.name || c.email || c.phone),
       notes,
     };
     if (client) {
@@ -69,19 +83,38 @@ export function ClientFormModal({
         <label>Nombre del cliente</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
-      <div className="field-row">
-        <div className="field">
-          <label>Persona de contacto</label>
-          <input type="text" value={contactName} onChange={(e) => setContactName(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>Teléfono</label>
-          <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
+      <div className="field">
+        <label>Estado</label>
+        <select value={status} onChange={(e) => setStatus(e.target.value as ClientStatus)}>
+          {CLIENT_STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label} — {s.hint}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="field">
-        <label>Email</label>
-        <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label>Personas de contacto</label>
+        {contacts.map((c, i) => (
+          <div key={i} className="contact-edit">
+            <div className="field-row">
+              <input type="text" placeholder="Nombre" value={c.name} onChange={(e) => setContact(i, { name: e.target.value })} />
+              <input type="text" placeholder="Cargo (opcional)" value={c.role} onChange={(e) => setContact(i, { role: e.target.value })} />
+            </div>
+            <div className="field-row">
+              <input type="email" placeholder="Email" value={c.email} onChange={(e) => setContact(i, { email: e.target.value })} />
+              <input type="tel" placeholder="Teléfono" value={c.phone} onChange={(e) => setContact(i, { phone: e.target.value })} />
+            </div>
+            {contacts.length > 1 && (
+              <button type="button" className="contact-remove" title="Quitar contacto" onClick={() => removeContact(i)}>
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+        <button type="button" className="btn btn-sm" onClick={() => setContacts((prev) => [...prev, emptyContact()])}>
+          + Añadir contacto
+        </button>
       </div>
       <div className="field">
         <label>Notas</label>

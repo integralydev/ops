@@ -22,9 +22,13 @@ create table if not exists profiles (
 create table if not exists clients (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  -- contact_name / email / phone: sin uso desde que hay varios contactos (contacts)
   contact_name text default '',
   email text default '',
   phone text default '',
+  -- [{ name, role, email, phone }]
+  contacts jsonb not null default '[]'::jsonb,
+  status text not null default 'lead' check (status in ('lead', 'prospect', 'client', 'former')),
   notes text default '',
   created_at timestamptz not null default now()
 );

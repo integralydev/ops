@@ -27,9 +27,21 @@ export interface Profile {
   added_by: string | null;
 }
 
+export type ClientStatus = "lead" | "prospect" | "client" | "former";
+
+export interface ClientContact {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+}
+
 export interface Client {
   id: string;
   name: string;
+  status: ClientStatus;
+  contacts: ClientContact[];
+  // Sin uso desde que hay varios contactos (contacts); se conservan los datos.
   contact_name: string | null;
   email: string | null;
   phone: string | null;

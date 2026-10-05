@@ -8,7 +8,7 @@ import { useProjects } from "@/lib/hooks/useProjects";
 import { ClientFormModal } from "@/components/ClientFormModal";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import { statusLabel } from "@/lib/format";
+import { clientContacts, clientStatusLabel, statusLabel } from "@/lib/format";
 
 export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
@@ -19,6 +19,7 @@ export default function ClientDetailPage() {
   const router = useRouter();
 
   const client = clients[clientId];
+  const contacts = client ? clientContacts(client) : [];
   const clientProjects = Object.entries(projects).filter(([, p]) => p.client_id === clientId);
 
   async function handleDelete() {
@@ -50,6 +51,7 @@ export default function ClientDetailPage() {
         <div>
           <h1>{client.name}</h1>
         </div>
+        <span className={`client-status client-status-${client.status || "lead"}`}>{clientStatusLabel(client.status)}</span>
       </div>
       <div className="content">
         <div className="grid" style={{ gridTemplateColumns: "1fr 1.4fr", alignItems: "start" }}>
@@ -68,13 +70,32 @@ export default function ClientDetailPage() {
               )}
             </div>
             <div className="section-title" style={{ marginTop: 0 }}>
-              Contacto
+              {contacts.length > 1 ? "Personas de contacto" : "Persona de contacto"}
             </div>
-            <div style={{ fontSize: 13.5 }}>{client.contact_name || "—"}</div>
-            <div className="section-title">Email</div>
-            <div style={{ fontSize: 13.5 }}>{client.email || "—"}</div>
-            <div className="section-title">Teléfono</div>
-            <div style={{ fontSize: 13.5 }}>{client.phone || "—"}</div>
+            {contacts.length ? (
+              <div className="contact-list">
+                {contacts.map((c, i) => (
+                  <div key={i}>
+                    <div className="contact-name">
+                      {c.name || "Sin nombre"}
+                      {c.role && <span className="contact-role">{c.role}</span>}
+                    </div>
+                    {c.email && (
+                      <div className="contact-line">
+                        <a href={`mailto:${c.email}`}>{c.email}</a>
+                      </div>
+                    )}
+                    {c.phone && (
+                      <div className="contact-line">
+                        <a href={`tel:${c.phone.replace(/\s+/g, "")}`}>{c.phone}</a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13.5 }}>—</div>
+            )}
             {client.notes && (
               <>
                 <div className="section-title">Notas</div>

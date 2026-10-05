@@ -1,4 +1,4 @@
-import type { ProjectStatus, Role } from "@/lib/database.types";
+import type { Client, ClientContact, ClientStatus, ProjectStatus, Role } from "@/lib/database.types";
 
 export function fmtDate(iso?: string | null) {
   if (!iso) return "";
@@ -66,6 +66,26 @@ export const STATUS_GROUP_LABELS = {
   ejecucion: "Ejecución",
   otros: "Otros",
 } as const;
+
+// Estados de un cliente, en el orden de la relación comercial.
+export const CLIENT_STATUSES: { value: ClientStatus; label: string; hint: string }[] = [
+  { value: "lead", label: "Lead", hint: "Contacto inicial, aún sin oportunidad clara" },
+  { value: "prospect", label: "Prospect", hint: "Oportunidad real: reuniones, propuesta o presupuesto" },
+  { value: "client", label: "Cliente", hint: "Trabajando con nosotros" },
+  { value: "former", label: "Ex cliente", hint: "Ya no trabajamos con ellos" },
+];
+
+export function clientStatusLabel(s?: string | null) {
+  return CLIENT_STATUSES.find((x) => x.value === s)?.label ?? "Lead";
+}
+
+// Contactos del cliente. Si aún no se ha migrado a varios contactos, usa los
+// campos antiguos (contact_name / email / phone).
+export function clientContacts(c: Client): ClientContact[] {
+  if (Array.isArray(c.contacts)) return c.contacts;
+  if (!c.contact_name && !c.email && !c.phone) return [];
+  return [{ name: c.contact_name || "", role: "", email: c.email || "", phone: c.phone || "" }];
+}
 
 // Añade https:// si falta, para que el enlace a la demo siempre funcione
 export function normalizeUrl(url?: string | null) {
