@@ -190,10 +190,10 @@ export function TasksTab({ project }: { project: Project }) {
           value={assignee}
           onChange={(e) => setAssignee(e.target.value)}
           style={{
-            padding: "9px 8px",
+            padding: "9px 32px 9px 11px",
             border: "1px solid var(--border)",
             borderRadius: 8,
-            background: "var(--surface)",
+            backgroundColor: "var(--surface)",
             color: "var(--ink)",
             fontSize: 13,
             maxWidth: 170,

@@ -147,11 +147,13 @@ export default function TeamPage() {
                 value={t.role}
                 onChange={(e) => setRole(id, e.target.value as Role)}
                 style={{
-                  padding: "5px 7px",
+                  padding: "5px 26px 5px 9px",
+                  backgroundPosition: "right 8px center",
+                  backgroundSize: 10,
                   border: "1px solid var(--border)",
                   borderRadius: 7,
                   fontSize: 12.3,
-                  background: "var(--surface)",
+                  backgroundColor: "var(--surface)",
                   color: "var(--ink)",
                 }}
               >
