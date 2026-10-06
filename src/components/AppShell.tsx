@@ -140,7 +140,13 @@ export default function AppShell({
   me,
   children,
 }: {
-  me: { id: string; email: string; full_name: string | null; role: "admin" | "director" | "developer" };
+  me: {
+    id: string;
+    email: string;
+    full_name: string | null;
+    role: "admin" | "director" | "developer";
+    place?: { city: string; country: string };
+  };
   children: React.ReactNode;
 }) {
   return (

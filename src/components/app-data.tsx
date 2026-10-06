@@ -9,6 +9,8 @@ interface Me {
   email: string;
   full_name: string | null;
   role: "admin" | "director" | "developer";
+  /** Ubicación aproximada de esta visita según la IP (vacía en local). */
+  place?: { city: string; country: string };
 }
 
 interface AppDataValue {

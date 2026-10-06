@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppData } from "@/components/app-data";
 import { useProjects } from "@/lib/hooks/useProjects";
 import { ProjectCard } from "@/components/ProjectCard";
@@ -8,9 +8,17 @@ import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { RecentActivity } from "@/components/RecentActivity";
 import { useRouter } from "next/navigation";
 import { PROJECT_STATUSES } from "@/lib/format";
+import { pickGreeting } from "@/lib/greetings";
 
 export default function DashboardPage() {
-  const { isStaff, team } = useAppData();
+  const { me, isStaff, team } = useAppData();
+  const firstName = (me.full_name || "").split(" ")[0];
+  // Se elige en el navegador: así usa la hora local de quien entra y no
+  // cambia entre el render del servidor y el del cliente.
+  const [greeting, setGreeting] = useState(firstName ? `Hola, ${firstName}` : "Inicio");
+  useEffect(() => {
+    if (firstName) setGreeting(pickGreeting({ name: firstName, city: me.place?.city, country: me.place?.country }));
+  }, [firstName, me.place?.city, me.place?.country]);
   const { projects, loading } = useProjects();
   const [showNew, setShowNew] = useState(false);
   const router = useRouter();
@@ -27,7 +35,7 @@ export default function DashboardPage() {
     <>
       <div className="topbar">
         <div>
-          <h1>Inicio</h1>
+          <h1>{greeting}</h1>
           <div className="topbar-sub">Resumen de la actividad de la agencia</div>
         </div>
         {isStaff && (

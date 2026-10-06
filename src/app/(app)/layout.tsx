@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/AppShell";
@@ -29,6 +30,21 @@ export default async function AuthenticatedLayout({
 
   if (!profile.full_name) redirect("/onboarding");
 
+  // Ubicación aproximada según la IP, que Vercel añade a cada petición
+  // (no se guarda en ningún sitio). En local no existe y el saludo se adapta.
+  const h = await headers();
+  const decode = (v: string | null) => {
+    try {
+      return v ? decodeURIComponent(v) : "";
+    } catch {
+      return v || "";
+    }
+  };
+  const place = {
+    city: decode(h.get("x-vercel-ip-city")),
+    country: h.get("x-vercel-ip-country") || "",
+  };
+
   return (
     <AppShell
       me={{
@@ -36,6 +52,7 @@ export default async function AuthenticatedLayout({
         email: user.email || "",
         full_name: profile.full_name,
         role: profile.role,
+        place,
       }}
     >
       {children}
