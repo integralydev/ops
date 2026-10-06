@@ -34,10 +34,18 @@ const TAB: Partial<Record<Activity["kind"], string>> = {
 
 // Actividad reciente de todos los proyectos visibles (RLS filtra por proyecto).
 // La rellenan triggers de la base de datos y llega en vivo por realtime.
-export function RecentActivity({ projects }: { projects: Record<string, Project> }) {
+// compact: versión resumida para Inicio (menos filas, sin el texto citado).
+export function RecentActivity({
+  projects,
+  compact = false,
+}: {
+  projects: Record<string, Project>;
+  compact?: boolean;
+}) {
   const { nameFor, clients } = useAppData();
+  const pageSize = compact ? 6 : PAGE;
   const [items, setItems] = useState<Activity[] | null>(null);
-  const [limit, setLimit] = useState(PAGE);
+  const [limit, setLimit] = useState(pageSize);
   const [hasMore, setHasMore] = useState(false);
   const supabase = useMemo(() => createClient(), []);
 
@@ -64,13 +72,13 @@ export function RecentActivity({ projects }: { projects: Record<string, Project>
       .channel("recent-activity")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity" }, (payload) => {
         const row = payload.new as Activity;
-        setItems((prev) => [row, ...(prev || []).filter((a) => a.id !== row.id)]);
+        setItems((prev) => [row, ...(prev || []).filter((a) => a.id !== row.id)].slice(0, limit));
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase]);
+  }, [supabase, limit]);
 
   function describe(a: Activity) {
     const d = a.data || {};
@@ -139,13 +147,13 @@ export function RecentActivity({ projects }: { projects: Record<string, Project>
   if (items.length === 0) return <div className="empty">Todavía no hay actividad en ningún proyecto.</div>;
 
   return (
-    <div className="card">
+    <div className={"card" + (compact ? " activity-compact" : "")}>
       {items.map((a) => {
         const project = projects[a.project_id];
         const client = project?.client_id ? clients[project.client_id] : null;
         const tab = TAB[a.kind];
-        const quote = a.kind === "update_posted" ? (a.data?.text as string) || "" : "";
-        const imgs = a.kind === "update_posted" ? Number(a.data?.images || 0) : 0;
+        const quote = !compact && a.kind === "update_posted" ? (a.data?.text as string) || "" : "";
+        const imgs = !compact && a.kind === "update_posted" ? Number(a.data?.images || 0) : 0;
         return (
           <Link
             key={a.id}
@@ -153,7 +161,7 @@ export function RecentActivity({ projects }: { projects: Record<string, Project>
             className="activity-row"
           >
             {a.actor_id ? (
-              <Avatar id={a.actor_id} name={nameFor(a.actor_id)} size={28} />
+              <Avatar id={a.actor_id} name={nameFor(a.actor_id)} size={compact ? 24 : 28} />
             ) : (
               <span className="activity-icon">{ICONS[a.kind]}</span>
             )}
@@ -180,7 +188,7 @@ export function RecentActivity({ projects }: { projects: Record<string, Project>
         );
       })}
       {hasMore && (
-        <button className="activity-more" onClick={() => setLimit((l) => l + PAGE)}>
+        <button className="activity-more" onClick={() => setLimit((l) => l + pageSize)}>
           Ver más actividad
         </button>
       )}
