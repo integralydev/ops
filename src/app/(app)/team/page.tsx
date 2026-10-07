@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { getTeamEmails, inviteTeamMember } from "./actions";
 import { ROLE_LABELS, type Role } from "@/lib/database.types";
+import { avatarColor } from "@/lib/format";
 
 function AddTeamModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
@@ -165,6 +166,9 @@ export default function TeamPage() {
                 <option value="director">Director de proyecto</option>
                 <option value="admin">Administrador</option>
               </select>
+              <button className="icon-btn" title="Cambiar color" onClick={() => setColorFor(id)}>
+                <span className="color-dot" style={{ background: avatarColor(id, t.color) }} />
+              </button>
               <button className="icon-btn" title="Editar nombre" onClick={() => renameMember(id)}>
                 ✎
               </button>

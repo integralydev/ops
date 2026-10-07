@@ -374,6 +374,7 @@ span.scope-status{cursor:default; display:inline-block;}
 /* Color de cada persona */
 .avatar-btn{padding:0; border:none; background:none; border-radius:50%; cursor:pointer; flex:0 0 auto; display:inline-flex; transition:transform .1s ease, box-shadow .1s ease;}
 .avatar-btn:hover{transform:scale(1.06); box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--border);}
+.color-dot{display:block; width:16px; height:16px; border-radius:50%; box-shadow:0 0 0 2px var(--surface), 0 0 0 3px var(--border);}
 .color-preview{display:flex; align-items:center; gap:14px; padding:12px 14px; margin-bottom:16px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2);}
 .color-swatches{display:flex; flex-wrap:wrap; gap:10px;}
 .color-swatch{position:relative; width:32px; height:32px; padding:0; border:none; border-radius:50%; cursor:pointer; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);}
