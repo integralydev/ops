@@ -23,6 +23,8 @@ export interface Profile {
   id: string;
   role: Role;
   full_name: string | null;
+  /** Color del avatar (#RRGGBB); null = automático según el id. */
+  color: string | null;
   created_at: string;
   added_by: string | null;
 }

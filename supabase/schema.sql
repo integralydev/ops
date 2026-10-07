@@ -12,6 +12,8 @@ create table if not exists profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   role text not null default 'developer' check (role in ('admin', 'director', 'developer')),
   full_name text,
+  -- color del avatar (#RRGGBB); vacío = automático
+  color text constraint profiles_color_hex check (color is null or color ~ '^#[0-9A-Fa-f]{6}$'),
   created_at timestamptz not null default now(),
   added_by uuid references auth.users (id)
 );

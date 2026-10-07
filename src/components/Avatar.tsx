@@ -1,18 +1,23 @@
 "use client";
 
-import { colorForId, initialsFor } from "@/lib/format";
+import { useChosenColor } from "@/components/app-data";
+import { avatarColor, initialsFor } from "@/lib/format";
 
 export function Avatar({
   id,
   name,
   size = 28,
   ring = false,
+  color,
 }: {
   id: string;
   name?: string | null;
   size?: number;
   ring?: boolean;
+  /** Fuerza un color (p. ej. para previsualizar al elegirlo). */
+  color?: string | null;
 }) {
+  const chosen = useChosenColor(id);
   return (
     <div
       title={name || undefined}
@@ -20,7 +25,7 @@ export function Avatar({
         width: size,
         height: size,
         borderRadius: "50%",
-        background: colorForId(id || "?"),
+        background: color || avatarColor(id, chosen),
         color: "#fff",
         display: "flex",
         alignItems: "center",

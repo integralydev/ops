@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/Avatar";
+import { ColorPickerModal } from "@/components/ColorPickerModal";
 import { AppDataProvider, useAppData } from "@/components/app-data";
 import { Toaster } from "@/components/toast";
 import { ROLE_LABELS } from "@/lib/database.types";
@@ -34,6 +35,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const { me, isAdmin, isStaff } = useAppData();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [showColor, setShowColor] = useState(false);
 
   function toggleTheme() {
     const root = document.documentElement;
@@ -105,7 +107,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             <span className="nav-label">Contraseña</span>
           </Link>
           <div className="me-row">
-            <Avatar id={me.id} name={me.full_name} size={30} />
+            <button className="avatar-btn" title="Cambiar tu color" onClick={() => setShowColor(true)}>
+              <Avatar id={me.id} name={me.full_name} size={30} />
+            </button>
             <div className="me-info" style={{ minWidth: 0, flex: 1 }}>
               <div className="me-name">{me.full_name || "Tú"}</div>
               <div className="me-role">{ROLE_LABELS[me.role]}</div>
@@ -132,6 +136,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         {children}
       </div>
       <Toaster />
+      {showColor && <ColorPickerModal userId={me.id} onClose={() => setShowColor(false)} />}
     </div>
   );
 }

@@ -20,9 +20,17 @@ interface AppDataValue {
   /** Administradores y directores de proyecto: ven y editan todos los proyectos y clientes. */
   isStaff: boolean;
   nameFor: (id?: string | null) => string;
+  /** Refleja al momento un cambio propio en un perfil, sin esperar a Realtime. */
+  patchProfile: (id: string, patch: Partial<Profile>) => void;
 }
 
 const AppDataContext = createContext<AppDataValue | null>(null);
+
+/** Color elegido por una persona (null si no hay o fuera de la app). */
+export function useChosenColor(id?: string | null) {
+  const ctx = useContext(AppDataContext);
+  return id ? ctx?.team[id]?.color || null : null;
+}
 
 export function useAppData() {
   const ctx = useContext(AppDataContext);
@@ -103,6 +111,8 @@ export function AppDataProvider({
     isAdmin: me.role === "admin",
     isStaff: me.role === "admin" || me.role === "director",
     nameFor,
+    patchProfile: (id, patch) =>
+      setTeam((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev)),
   };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

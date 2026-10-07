@@ -371,6 +371,16 @@ span.scope-status{cursor:default; display:inline-block;}
 .note-compose{display:flex; gap:10px; margin-top:14px;}
 .note-compose textarea{flex:1; min-height:46px;}
 
+/* Color de cada persona */
+.avatar-btn{padding:0; border:none; background:none; border-radius:50%; cursor:pointer; flex:0 0 auto; display:inline-flex; transition:transform .1s ease, box-shadow .1s ease;}
+.avatar-btn:hover{transform:scale(1.06); box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--border);}
+.color-preview{display:flex; align-items:center; gap:14px; padding:12px 14px; margin-bottom:16px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2);}
+.color-swatches{display:flex; flex-wrap:wrap; gap:10px;}
+.color-swatch{position:relative; width:32px; height:32px; padding:0; border:none; border-radius:50%; cursor:pointer; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);}
+.color-swatch:hover{transform:scale(1.08);}
+.color-swatch.active{box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--ink);}
+.color-swatches .color-custom{margin:0; display:flex; align-items:center; justify-content:center; background:var(--surface); border:1.5px dashed var(--ink-faint); box-shadow:none; color:var(--ink-soft); font-size:16px; overflow:hidden;}
+.color-swatches .color-custom input{position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:none; padding:0;}
 .team-row{display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid var(--border);}
 .team-row:last-child{border-bottom:none;}
 .role-pill{font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px;}

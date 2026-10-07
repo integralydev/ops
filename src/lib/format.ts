@@ -112,6 +112,18 @@ const AVATAR_COLORS = [
   "#4C46E0", "#1D8F5E", "#B9760F", "#CC4433", "#0E7490", "#7C3AED", "#BE185D", "#16803C",
 ];
 
+// Colores que se ofrecen al elegir el color de una persona (todos con buen
+// contraste para las iniciales en blanco).
+export const COLOR_CHOICES = [
+  ...AVATAR_COLORS,
+  "#2563EB", "#0F766E", "#C2410C", "#9D174D", "#475569", "#1C1C1F",
+];
+
+/** Color del avatar: el elegido por la persona o, si no hay, uno fijo según su id. */
+export function avatarColor(id: string, chosen?: string | null) {
+  return chosen || colorForId(id || "?");
+}
+
 export function colorForId(id: string) {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;

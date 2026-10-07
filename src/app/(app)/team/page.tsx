@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { Modal } from "@/components/Modal";
+import { ColorPickerModal } from "@/components/ColorPickerModal";
 import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
@@ -70,6 +71,7 @@ function AddTeamModal({ onClose }: { onClose: () => void }) {
 export default function TeamPage() {
   const { me, team, nameFor } = useAppData();
   const [showAdd, setShowAdd] = useState(false);
+  const [colorFor, setColorFor] = useState<string | null>(null);
   const [emails, setEmails] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -128,7 +130,9 @@ export default function TeamPage() {
         <div className="card pad">
           {rows.map(([id, t]) => (
             <div className="team-row" key={id}>
-              <Avatar id={id} name={nameFor(id)} size={34} />
+              <button className="avatar-btn" title="Cambiar color" onClick={() => setColorFor(id)}>
+                <Avatar id={id} name={nameFor(id)} size={34} />
+              </button>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 13.6 }}>
                   {nameFor(id)}
@@ -173,6 +177,7 @@ export default function TeamPage() {
       </div>
 
       {showAdd && <AddTeamModal onClose={() => setShowAdd(false)} />}
+      {colorFor && <ColorPickerModal userId={colorFor} onClose={() => setColorFor(null)} />}
     </>
   );
 }
