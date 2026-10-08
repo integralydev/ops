@@ -2,12 +2,13 @@
 // Si prefieres tipos generados automáticamente, puedes sustituir este
 // archivo por el resultado de `supabase gen types typescript`.
 
-export type Role = "admin" | "director" | "developer";
+export type Role = "admin" | "director" | "developer" | "comercial";
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Administrador",
   director: "Director de proyecto",
   developer: "Developer",
+  comercial: "Comercial",
 };
 export type ProjectStatus =
   | "descubrimiento"
@@ -161,4 +162,52 @@ export interface Database {
       update_next_step: { Args: { pid: string; val: string }; Returns: void };
     };
   };
+}
+
+// ---------------------------------------------------------------------------
+// Sección Comercial: empresas del embudo, antes de ser proyecto. Sin datos
+// económicos a propósito.
+// ---------------------------------------------------------------------------
+export type ProspectStatus =
+  | "sin_contactar"
+  | "contactada"
+  | "reunion_hecha"
+  | "propuesta_enviada"
+  | "cerrada"
+  | "descartada";
+export type ProspectZone = "rodalies" | "alejados";
+export type ProspectSource = "ana" | "silleda" | "pipeline" | "propio";
+
+export interface Prospect {
+  id: string;
+  name: string;
+  zone: ProspectZone | null;
+  city: string;
+  province: string;
+  phone: string;
+  mobile: string;
+  email: string;
+  app_code: string | null;
+  source: ProspectSource;
+  status: ProspectStatus;
+  owner_id: string | null;
+  next_action: string;
+  next_action_date: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  last_touched_at: string;
+}
+
+export interface ProspectEvent {
+  id: string;
+  prospect_id: string;
+  actor_id: string | null;
+  kind: "note" | "created" | "status" | "owner" | "next_action";
+  text: string;
+  data: Record<string, unknown>;
+  created_at: string;
+  edited_at: string | null;
 }

@@ -8,7 +8,7 @@ import { Avatar } from "@/components/Avatar";
 import { ColorPickerModal } from "@/components/ColorPickerModal";
 import { AppDataProvider, useAppData } from "@/components/app-data";
 import { Toaster } from "@/components/toast";
-import { ROLE_LABELS } from "@/lib/database.types";
+import { ROLE_LABELS, type Role } from "@/lib/database.types";
 
 function NavItem({
   href,
@@ -32,7 +32,7 @@ function NavItem({
 }
 
 function ShellInner({ children }: { children: React.ReactNode }) {
-  const { me, isAdmin, isStaff } = useAppData();
+  const { me, isAdmin, isStaff, isComercial, hasSales } = useAppData();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [showColor, setShowColor] = useState(false);
@@ -77,8 +77,14 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           <div className="brand-sub" style={{ marginTop: 0 }}>Ops</div>
         </div>
         <div className="nav-section">General</div>
-        <NavItem href="/dashboard" icon="🏠" label="Inicio" onNavigate={() => setOpen(false)} />
-        <NavItem href="/projects" icon="📁" label="Proyectos" onNavigate={() => setOpen(false)} />
+        {/* El rol comercial solo entra en Comercial */}
+        {!isComercial && (
+          <>
+            <NavItem href="/dashboard" icon="🏠" label="Inicio" onNavigate={() => setOpen(false)} />
+            <NavItem href="/projects" icon="📁" label="Proyectos" onNavigate={() => setOpen(false)} />
+          </>
+        )}
+        {hasSales && <NavItem href="/comercial" icon="🎯" label="Comercial" onNavigate={() => setOpen(false)} />}
         {isStaff && (
           <>
             <div className="nav-section">Administración</div>
@@ -145,7 +151,7 @@ export default function AppShell({
   me,
   children,
 }: {
-  me: { id: string; email: string; full_name: string | null; role: "admin" | "director" | "developer" };
+  me: { id: string; email: string; full_name: string | null; role: Role };
   children: React.ReactNode;
 }) {
   return (

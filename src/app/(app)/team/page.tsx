@@ -60,6 +60,7 @@ function AddTeamModal({ onClose }: { onClose: () => void }) {
           <option value="developer">Developer — acceso solo a sus proyectos</option>
           <option value="director">Director de proyecto — ve y edita todo, sin gestionar el equipo</option>
           <option value="admin">Administrador — acceso completo</option>
+          <option value="comercial">Comercial — solo la sección Comercial</option>
         </select>
       </div>
       <p className="muted" style={{ fontSize: 12.3, lineHeight: 1.5 }}>
@@ -79,7 +80,7 @@ export default function TeamPage() {
     getTeamEmails().then(setEmails);
   }, [team]);
 
-  const roleOrder: Record<Role, number> = { admin: 0, director: 1, developer: 2 };
+  const roleOrder: Record<Role, number> = { admin: 0, director: 1, developer: 2, comercial: 3 };
   const rows = Object.entries(team).sort(([, a], [, b]) => roleOrder[a.role] - roleOrder[b.role]);
 
   async function setRole(id: string, role: Role) {
@@ -165,6 +166,7 @@ export default function TeamPage() {
                 <option value="developer">Developer</option>
                 <option value="director">Director de proyecto</option>
                 <option value="admin">Administrador</option>
+                <option value="comercial">Comercial</option>
               </select>
               <button className="icon-btn" title="Cambiar color" onClick={() => setColorFor(id)}>
                 <span className="color-dot" style={{ background: avatarColor(id, t.color) }} />

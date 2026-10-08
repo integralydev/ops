@@ -2,13 +2,13 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Client, Profile } from "@/lib/database.types";
+import type { Client, Profile, Role } from "@/lib/database.types";
 
 interface Me {
   id: string;
   email: string;
   full_name: string | null;
-  role: "admin" | "director" | "developer";
+  role: Role;
 }
 
 interface AppDataValue {
@@ -19,6 +19,10 @@ interface AppDataValue {
   isAdmin: boolean;
   /** Administradores y directores de proyecto: ven y editan todos los proyectos y clientes. */
   isStaff: boolean;
+  /** Rol comercial: solo accede a la sección Comercial. */
+  isComercial: boolean;
+  /** Acceso a la sección Comercial: administradores y comerciales. */
+  hasSales: boolean;
   nameFor: (id?: string | null) => string;
   /** Refleja al momento un cambio propio en un perfil, sin esperar a Realtime. */
   patchProfile: (id: string, patch: Partial<Profile>) => void;
@@ -110,6 +114,8 @@ export function AppDataProvider({
     clients,
     isAdmin: me.role === "admin",
     isStaff: me.role === "admin" || me.role === "director",
+    isComercial: me.role === "comercial",
+    hasSales: me.role === "admin" || me.role === "comercial",
     nameFor,
     patchProfile: (id, patch) =>
       setTeam((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev)),

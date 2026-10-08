@@ -11,10 +11,15 @@ import { PROJECT_STATUSES, STATUS_GROUP_LABELS, normalizeUrl } from "@/lib/forma
 
 export function ProjectFormModal({
   project,
+  initialClientId,
+  initialName,
   onClose,
   onSaved,
 }: {
   project?: Project;
+  /** Para un proyecto nuevo: cliente ya elegido (p. ej. al cerrar una empresa en Comercial). */
+  initialClientId?: string;
+  initialName?: string;
   onClose: () => void;
   onSaved?: (id: string) => void;
 }) {
@@ -32,9 +37,9 @@ export function ProjectFormModal({
     return match?.id ?? null;
   }
 
-  const [name, setName] = useState(project?.name || "");
+  const [name, setName] = useState(project?.name || initialName || "");
   const [status, setStatus] = useState<ProjectStatus>(project?.status || "descubrimiento");
-  const [clientId, setClientId] = useState(project?.client_id || "");
+  const [clientId, setClientId] = useState(project?.client_id || initialClientId || "");
   const [ownerId, setOwnerId] = useState(
     project ? project.owner_id || "" : defaultOwnerFor("descubrimiento") || "",
   );

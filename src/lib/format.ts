@@ -1,4 +1,13 @@
-import type { Client, ClientContact, ClientStatus, ProjectStatus, Role } from "@/lib/database.types";
+import type {
+  Client,
+  ClientContact,
+  ClientStatus,
+  ProjectStatus,
+  ProspectSource,
+  ProspectStatus,
+  ProspectZone,
+  Role,
+} from "@/lib/database.types";
 
 export function fmtDate(iso?: string | null) {
   if (!iso) return "";
@@ -85,6 +94,39 @@ export function clientContacts(c: Client): ClientContact[] {
   if (Array.isArray(c.contacts)) return c.contacts;
   if (!c.contact_name && !c.email && !c.phone) return [];
   return [{ name: c.contact_name || "", role: "", email: c.email || "", phone: c.phone || "" }];
+}
+
+// Embudo comercial, en orden. "open": aún en juego (cuenta para lo que lleva
+// días sin tocar).
+export const PROSPECT_STATUSES: { value: ProspectStatus; label: string; open: boolean }[] = [
+  { value: "sin_contactar", label: "Sin contactar", open: true },
+  { value: "contactada", label: "Contactada", open: true },
+  { value: "reunion_hecha", label: "Reunión hecha", open: true },
+  { value: "propuesta_enviada", label: "Propuesta enviada", open: true },
+  { value: "cerrada", label: "Cerrada", open: false },
+  { value: "descartada", label: "Descartada", open: false },
+];
+export const PROSPECT_ZONES: { value: ProspectZone; label: string }[] = [
+  { value: "rodalies", label: "Rodalies" },
+  { value: "alejados", label: "Alejados" },
+];
+export const PROSPECT_SOURCES: { value: ProspectSource; label: string }[] = [
+  { value: "ana", label: "Cartera de Ana" },
+  { value: "silleda", label: "Feria de Silleda" },
+  { value: "pipeline", label: "Pipeline parado" },
+  { value: "propio", label: "Propio" },
+];
+/** Días sin movimiento a partir de los que una empresa se marca como parada. */
+export const PROSPECT_STALE_DAYS = 7;
+
+export function prospectStatusLabel(s?: string | null) {
+  return PROSPECT_STATUSES.find((x) => x.value === s)?.label ?? s ?? "";
+}
+export function prospectSourceLabel(s?: string | null) {
+  return PROSPECT_SOURCES.find((x) => x.value === s)?.label ?? s ?? "";
+}
+export function prospectZoneLabel(s?: string | null) {
+  return PROSPECT_ZONES.find((x) => x.value === s)?.label ?? "Sin zona";
 }
 
 // Añade https:// si falta, para que el enlace a la demo siempre funcione
