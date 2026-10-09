@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useAppData } from "@/components/app-data";
-import { useProjects } from "@/lib/hooks/useProjects";
+import { useFeaturedLinks, useProjects } from "@/lib/hooks/useProjects";
 import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectTable } from "@/components/ProjectTable";
 import { ProjectTimeline } from "@/components/ProjectTimeline";
@@ -37,6 +37,7 @@ function saveView(v: View) {
 export default function ProjectsPage() {
   const { isStaff } = useAppData();
   const { projects, loading } = useProjects();
+  const featured = useFeaturedLinks();
   const [showNew, setShowNew] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<Record<string, { team: number; client: number }>>({});
   const [lastUpdates, setLastUpdates] = useState<
@@ -133,7 +134,7 @@ export default function ProjectsPage() {
         ) : view === "timeline" ? (
           <ProjectTimeline projects={all} />
         ) : view === "table" ? (
-          <ProjectTable groups={groups} pendingTasks={pendingTasks} lastUpdates={lastUpdates} />
+          <ProjectTable groups={groups} pendingTasks={pendingTasks} lastUpdates={lastUpdates} featured={featured} />
         ) : (
           groups.map((g) => (
             <div key={g.key} className="section-block">
@@ -142,7 +143,7 @@ export default function ProjectsPage() {
               </div>
               <div className="grid grid-cards">
                 {g.projects.map((p) => (
-                  <ProjectCard key={p.id} project={p} />
+                  <ProjectCard key={p.id} project={p} featured={featured[p.id]} />
                 ))}
               </div>
             </div>

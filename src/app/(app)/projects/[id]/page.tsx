@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAppData } from "@/components/app-data";
-import { useProject } from "@/lib/hooks/useProjectDetail";
+import { useLinks, useProject } from "@/lib/hooks/useProjectDetail";
 import { ResumenTab } from "@/components/project/ResumenTab";
 import { TasksTab } from "@/components/project/TasksTab";
 import { FilesTab } from "@/components/project/FilesTab";
 import { NotesTab } from "@/components/project/NotesTab";
 import { ScopeTab } from "@/components/project/ScopeTab";
+import { LinksTab } from "@/components/project/LinksTab";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 
 const TABS = [
@@ -16,6 +17,7 @@ const TABS = [
   ["scope", "Scope"],
   ["tareas", "Tareas"],
   ["archivos", "Archivos"],
+  ["enlaces", "Enlaces"],
   ["actualizaciones", "Actualizaciones"],
 ] as const;
 
@@ -28,6 +30,8 @@ export default function ProjectDetailPage() {
   const tab = rawTab === "notas" ? "actualizaciones" : rawTab; // enlaces antiguos
   const { isStaff, clients } = useAppData();
   const project = useProject(projectId);
+  const { rows: links } = useLinks(projectId);
+  const featured = Object.values(links).find((l) => l.featured);
   const [showEdit, setShowEdit] = useState(false);
 
   function setTab(t: string) {
@@ -60,9 +64,9 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          {project.demo_url && (
-            <a className="btn" href={project.demo_url} target="_blank" rel="noopener noreferrer">
-              Abrir demo ↗
+          {featured && (
+            <a className="btn" href={featured.url} target="_blank" rel="noopener noreferrer" title={featured.url}>
+              Abrir {featured.label.toLowerCase() === "demo" ? "demo" : featured.label} ↗
             </a>
           )}
           {isStaff && (
@@ -90,6 +94,8 @@ export default function ProjectDetailPage() {
           <TasksTab project={project} />
         ) : tab === "archivos" ? (
           <FilesTab project={project} />
+        ) : tab === "enlaces" ? (
+          <LinksTab project={project} />
         ) : tab === "actualizaciones" ? (
           <NotesTab project={project} />
         ) : (

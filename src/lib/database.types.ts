@@ -61,7 +61,6 @@ export interface Project {
   developer_ids: string[];
   next_step: string | null;
   description: string | null;
-  demo_url: string | null;
   notes_doc: string | null;
   notes_updated_at: string | null;
   notes_updated_by: string | null;
@@ -128,7 +127,8 @@ export type ActivityKind =
   | "status_changed"
   | "owner_changed"
   | "developer_added"
-  | "demo_link"
+  | "demo_link" // histórico: antes de que existieran los enlaces del proyecto
+  | "link_added"
   | "notes_edited"
   | "next_step"
   | "task_created"
@@ -210,4 +210,20 @@ export interface ProspectEvent {
   data: Record<string, unknown>;
   created_at: string;
   edited_at: string | null;
+}
+
+// Enlaces importantes de un proyecto. Solo enlaces, nunca credenciales.
+export type LinkCategory = "produccion" | "infraestructura" | "repositorio" | "documentos" | "cliente";
+
+export interface ProjectLink {
+  id: string;
+  project_id: string;
+  label: string;
+  url: string;
+  category: LinkCategory;
+  /** El enlace rápido del proyecto (botón de la cabecera, tarjetas y tabla). */
+  featured: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }

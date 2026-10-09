@@ -7,7 +7,7 @@ import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import type { Project, ProjectStatus } from "@/lib/database.types";
-import { PROJECT_STATUSES, STATUS_GROUP_LABELS, normalizeUrl } from "@/lib/format";
+import { PROJECT_STATUSES, STATUS_GROUP_LABELS } from "@/lib/format";
 
 export function ProjectFormModal({
   project,
@@ -52,7 +52,6 @@ export function ProjectFormModal({
   const [devIds, setDevIds] = useState<string[]>(project?.developer_ids || []);
   const [nextStep, setNextStep] = useState(project?.next_step || "");
   const [description, setDescription] = useState(project?.description || "");
-  const [demoUrl, setDemoUrl] = useState(project?.demo_url || "");
   const [saving, setSaving] = useState(false);
 
   const admins = Object.entries(team).filter(([, t]) => t.role === "admin" || t.role === "director");
@@ -74,7 +73,6 @@ export function ProjectFormModal({
       developer_ids: devIds,
       next_step: nextStep,
       description,
-      demo_url: normalizeUrl(demoUrl),
     };
     if (project) {
       const { error } = await supabase
@@ -205,15 +203,6 @@ export function ProjectFormModal({
           value={nextStep}
           onChange={(e) => setNextStep(e.target.value)}
           placeholder="Qué toca hacer ahora"
-        />
-      </div>
-      <div className="field">
-        <label>Enlace a la demo (opcional)</label>
-        <input
-          type="url"
-          value={demoUrl}
-          onChange={(e) => setDemoUrl(e.target.value)}
-          placeholder="https://… (prueba de concepto, beta, prototipo)"
         />
       </div>
       <div className="field">

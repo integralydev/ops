@@ -3,7 +3,7 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useAppData } from "@/components/app-data";
-import { useProjects } from "@/lib/hooks/useProjects";
+import { useFeaturedLinks, useProjects } from "@/lib/hooks/useProjects";
 import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { RecentActivity } from "@/components/RecentActivity";
@@ -28,6 +28,7 @@ const noSubscribe = () => () => {};
 export default function DashboardPage() {
   const { me, isStaff, team, clients } = useAppData();
   const { projects, loading } = useProjects();
+  const featured = useFeaturedLinks();
   const [showNew, setShowNew] = useState(false);
   const router = useRouter();
 
@@ -107,7 +108,7 @@ export default function DashboardPage() {
             ) : (
               <div className="dash-projects">
                 {active.map((p) => (
-                  <ProjectCard key={p.id} project={p} />
+                  <ProjectCard key={p.id} project={p} featured={featured[p.id]} />
                 ))}
               </div>
             )}

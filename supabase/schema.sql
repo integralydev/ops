@@ -47,7 +47,6 @@ create table if not exists projects (
   developer_ids uuid[] not null default '{}',
   next_step text default '',
   description text default '',
-  demo_url text default '',
   notes_doc text default '',
   notes_updated_at timestamptz,
   notes_updated_by uuid references auth.users (id),
@@ -401,9 +400,6 @@ begin
       end if;
     end loop;
   end if;
-  if coalesce(new.demo_url, '') <> '' and new.demo_url is distinct from old.demo_url then
-    perform log_activity(new.id, 'demo_link', jsonb_build_object('url', new.demo_url));
-  end if;
   if new.notes_doc is distinct from old.notes_doc then
     perform log_activity(new.id, 'notes_edited', '{}');
   end if;
@@ -726,5 +722,88 @@ begin
   end if;
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'prospect_events') then
     alter publication supabase_realtime add table prospect_events;
+  end if;
+end $$;
+
+-- ===========================================================================
+-- Enlaces importantes de cada proyecto (ver migrations/2026-10-09_enlaces_proyecto.sql)
+-- Solo enlaces, nunca credenciales.
+-- ===========================================================================
+
+create table if not exists project_links (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects (id) on delete cascade,
+  label text not null check (length(trim(label)) > 0),
+  url text not null,
+  category text not null check (category in ('produccion', 'infraestructura', 'repositorio', 'documentos', 'cliente')),
+  featured boolean not null default false,
+  created_by uuid references auth.users (id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint project_links_url_http check (url ~* '^https?://\S+$'),
+  -- nada de https://usuario:contraseña@…
+  constraint project_links_no_userinfo check (url !~* '^[a-z]+://[^/?#]*@'),
+  -- nada de claves, tokens ni firmas en la URL
+  constraint project_links_no_secrets check (
+    url !~* '[?&#](token|access_token|refresh_token|id_token|key|api_key|apikey|api-key|secret|client_secret|password|passwd|pwd|pass|auth|sig|signature|x-amz-signature|x-amz-credential|x-goog-signature|x-goog-credential)='
+  )
+);
+create index if not exists project_links_project_idx on project_links (project_id);
+-- Como mucho un enlace destacado por proyecto
+create unique index if not exists project_links_one_featured on project_links (project_id) where featured;
+
+create or replace function trg_project_links_touch()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_project_links_touch on project_links;
+create trigger trg_project_links_touch
+  before update on project_links
+  for each row execute function trg_project_links_touch();
+
+-- Actividad: "ha añadido el enlace X" (sin la URL)
+create or replace function trg_activity_links()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform log_activity(new.project_id, 'link_added', jsonb_build_object('label', new.label, 'category', new.category));
+  return new;
+end;
+$$;
+revoke execute on function trg_activity_links() from public, authenticated, anon;
+
+drop trigger if exists trg_activity_links on project_links;
+create trigger trg_activity_links
+  after insert on project_links
+  for each row execute function trg_activity_links();
+
+-- Permisos
+alter table project_links enable row level security;
+drop policy if exists "links_select_member" on project_links;
+drop policy if exists "links_insert_member" on project_links;
+drop policy if exists "links_update_member" on project_links;
+drop policy if exists "links_delete_owner" on project_links;
+create policy "links_select_member" on project_links for select to authenticated
+  using (is_project_member(project_id));
+create policy "links_insert_member" on project_links for insert to authenticated
+  with check (is_project_member(project_id) and created_by = auth.uid());
+create policy "links_update_member" on project_links for update to authenticated
+  using (is_project_member(project_id)) with check (is_project_member(project_id));
+create policy "links_delete_owner" on project_links for delete to authenticated
+  using (is_project_member(project_id) and (is_staff() or created_by = auth.uid()));
+
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'project_links') then
+    alter publication supabase_realtime add table project_links;
   end if;
 end $$;

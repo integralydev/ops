@@ -2,6 +2,7 @@ import type {
   Client,
   ClientContact,
   ClientStatus,
+  LinkCategory,
   ProjectStatus,
   ProspectSource,
   ProspectStatus,
@@ -127,6 +128,47 @@ export function prospectSourceLabel(s?: string | null) {
 }
 export function prospectZoneLabel(s?: string | null) {
   return PROSPECT_ZONES.find((x) => x.value === s)?.label ?? "Sin zona";
+}
+
+// Categorías de los enlaces de un proyecto, en el orden en que se muestran
+export const LINK_CATEGORIES: { value: LinkCategory; label: string; icon: string; hint: string }[] = [
+  { value: "produccion", label: "Producción", icon: "🚀", hint: "App en producción, demo, beta" },
+  { value: "infraestructura", label: "Infraestructura", icon: "☁️", hint: "Consola de Google Cloud, Vercel, Supabase…" },
+  { value: "repositorio", label: "Repositorio", icon: "💻", hint: "GitHub, GitLab…" },
+  { value: "documentos", label: "Documentos", icon: "📄", hint: "Excels de seguimiento, especificaciones…" },
+  { value: "cliente", label: "Cliente", icon: "🤝", hint: "Web del cliente, sus herramientas…" },
+];
+
+/**
+ * Si la URL parece llevar una credencial, devuelve por qué (si no, null).
+ * Es la misma regla que aplica la base de datos (project_links), para avisar
+ * antes de guardar.
+ */
+export function linkCredentialProblem(url: string): string | null {
+  const u = url.trim();
+  if (!/^https?:\/\/\S+$/i.test(u)) return "Tiene que ser una dirección web completa (https://…), sin espacios.";
+  if (/^[a-z]+:\/\/[^/?#]*@/i.test(u)) return "Lleva un usuario o contraseña dentro de la dirección. Quítalo: aquí solo van enlaces.";
+  if (
+    /[?&#](token|access_token|refresh_token|id_token|key|api_key|apikey|api-key|secret|client_secret|password|passwd|pwd|pass|auth|sig|signature|x-amz-signature|x-amz-credential|x-goog-signature|x-goog-credential)=/i.test(
+      u,
+    )
+  )
+    return "Lleva una clave, token o firma en la dirección. Quítala: aquí solo van enlaces, nunca credenciales.";
+  return null;
+}
+
+/** Enlaces de Google Docs/Sheets/Drive: pueden estar compartidos con "cualquiera con el enlace". */
+export function isGoogleShareLink(url: string) {
+  return /^https?:\/\/(docs|drive|sheets)\.google\.com\//i.test(url.trim());
+}
+
+/** Dominio de una URL, para mostrarlo debajo del nombre del enlace. */
+export function urlHost(url: string) {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 // Añade https:// si falta, para que el enlace a la demo siempre funcione

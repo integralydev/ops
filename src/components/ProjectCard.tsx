@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useAppData } from "@/components/app-data";
 import { statusLabel } from "@/lib/format";
-import type { Project } from "@/lib/database.types";
+import type { Project, ProjectLink } from "@/lib/database.types";
 
-export function ProjectCard({ project }: { project: Project }) {
+export function ProjectCard({ project, featured }: { project: Project; featured?: ProjectLink }) {
   const { clients, nameFor } = useAppData();
   const client = project.client_id ? clients[project.client_id] : null;
 
@@ -30,7 +30,7 @@ export function ProjectCard({ project }: { project: Project }) {
         <div className="next-step muted">Sin próximo paso definido</div>
       )}
       <div className="proj-foot">
-        {project.demo_url ? (
+        {featured ? (
           <span
             role="link"
             className="demo-link"
@@ -39,10 +39,10 @@ export function ProjectCard({ project }: { project: Project }) {
               // La tarjeta entera ya es un enlace: abrimos la demo sin navegar al proyecto
               e.preventDefault();
               e.stopPropagation();
-              window.open(project.demo_url!, "_blank", "noopener,noreferrer");
+              window.open(featured.url, "_blank", "noopener,noreferrer");
             }}
           >
-            Demo ↗
+            {featured.label} ↗
           </span>
         ) : (
           <span />

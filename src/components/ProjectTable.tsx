@@ -5,16 +5,19 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
 import { fmtDateTime, fmtRelative, statusLabel } from "@/lib/format";
-import type { Project } from "@/lib/database.types";
+import type { Project, ProjectLink } from "@/lib/database.types";
 
 export function ProjectTable({
   groups,
   pendingTasks,
   lastUpdates,
+  featured = {},
 }: {
   groups: { key: string; label: string; projects: Project[] }[];
   pendingTasks: Record<string, { team: number; client: number }>;
   lastUpdates: Record<string, { author_id: string | null; text: string; created_at: string }>;
+  /** Enlace destacado de cada proyecto (por id de proyecto). */
+  featured?: Record<string, ProjectLink>;
 }) {
   const { clients, nameFor } = useAppData();
   const router = useRouter();
@@ -50,15 +53,16 @@ export function ProjectTable({
                     </Link>
                     <div className="ptable-sub">
                       {client ? p.name : "Sin cliente"}
-                      {p.demo_url && (
+                      {featured[p.id] && (
                         <a
                           className="demo-link"
-                          href={p.demo_url}
+                          href={featured[p.id].url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          title={featured[p.id].url}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          Demo ↗
+                          {featured[p.id].label} ↗
                         </a>
                       )}
                     </div>

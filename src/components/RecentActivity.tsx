@@ -16,6 +16,7 @@ const ICONS: Record<Activity["kind"], string> = {
   owner_changed: "👤",
   developer_added: "➕",
   demo_link: "🔗",
+  link_added: "🔗",
   notes_edited: "📝",
   next_step: "🎯",
   task_created: "☐",
@@ -26,6 +27,8 @@ const ICONS: Record<Activity["kind"], string> = {
 
 // Pestaña del proyecto a la que lleva cada tipo de actividad
 const TAB: Partial<Record<Activity["kind"], string>> = {
+  link_added: "enlaces",
+  demo_link: "enlaces",
   task_created: "tareas",
   task_done: "tareas",
   file_uploaded: "archivos",
@@ -108,6 +111,12 @@ export function RecentActivity({
         );
       case "demo_link":
         return "ha añadido el enlace a la demo";
+      case "link_added":
+        return (
+          <>
+            ha añadido el enlace <b>«{str("label")}»</b>
+          </>
+        );
       case "notes_edited":
         return "ha editado las notas del proyecto";
       case "next_step":

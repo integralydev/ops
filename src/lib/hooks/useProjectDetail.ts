@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { FileRow, Note, Project, ScopeItem, Task } from "@/lib/database.types";
+import type { FileRow, Note, Project, ProjectLink, ScopeItem, Task } from "@/lib/database.types";
 
 export function useProject(id: string) {
   const [project, setProject] = useState<Project | null | undefined>(undefined); // undefined = loading
@@ -43,7 +43,7 @@ export function useProject(id: string) {
   return project;
 }
 
-function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "notes" | "scope_items", projectId: string, orderCol = "created_at") {
+function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "notes" | "scope_items" | "project_links", projectId: string, orderCol = "created_at") {
   const [rows, setRows] = useState<Record<string, T>>({});
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
@@ -122,4 +122,7 @@ export function useNotes(projectId: string) {
 }
 export function useScope(projectId: string) {
   return useSubcollection<ScopeItem>("scope_items", projectId, "position");
+}
+export function useLinks(projectId: string) {
+  return useSubcollection<ProjectLink>("project_links", projectId);
 }

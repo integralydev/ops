@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Project } from "@/lib/database.types";
+import type { Project, ProjectLink } from "@/lib/database.types";
 
 export function useProjects() {
   const [projects, setProjects] = useState<Record<string, Project>>({});
@@ -61,4 +61,53 @@ export function useProjects() {
   }, [supabase]);
 
   return { projects, loading };
+}
+
+// Enlace destacado de cada proyecto visible (botón rápido en tarjetas y tabla).
+// RLS ya filtra: solo llegan los de proyectos de los que eres miembro.
+export function useFeaturedLinks() {
+  const [byId, setById] = useState<Record<string, ProjectLink>>({});
+  const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    let alive = true;
+    supabase
+      .from("project_links")
+      .select("*")
+      .eq("featured", true)
+      .then(({ data }) => {
+        if (!alive) return;
+        const m: Record<string, ProjectLink> = {};
+        (data || []).forEach((l) => (m[l.id] = l as ProjectLink));
+        setById(m);
+      });
+
+    const channel = supabase
+      .channel("featured-links")
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_links" }, (payload) => {
+        setById((prev) => {
+          const next = { ...prev };
+          if (payload.eventType === "DELETE") delete next[(payload.old as ProjectLink).id];
+          else {
+            const row = payload.new as ProjectLink;
+            if (row.featured) next[row.id] = row;
+            else delete next[row.id];
+          }
+          return next;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      alive = false;
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  // Por proyecto
+  return useMemo(() => {
+    const m: Record<string, ProjectLink> = {};
+    Object.values(byId).forEach((l) => (m[l.project_id] = l));
+    return m;
+  }, [byId]);
 }
