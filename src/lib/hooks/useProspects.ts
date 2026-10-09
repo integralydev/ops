@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Prospect, ProspectEvent } from "@/lib/database.types";
 
@@ -11,6 +11,9 @@ export function useProspects() {
   const [prospects, setProspects] = useState<Record<string, Prospect>>({});
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
+  // Nombre de canal único por componente: si dos partes de la misma página
+  // piden el mismo canal, Supabase devuelve el ya suscrito y falla al añadirle escuchas.
+  const uid = useId();
 
   useEffect(() => {
     let alive = true;
@@ -27,7 +30,7 @@ export function useProspects() {
       });
 
     const channel = supabase
-      .channel("prospects")
+      .channel(`prospects-${uid}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "prospects" }, (payload) => {
         setProspects((prev) => {
           const next = { ...prev };
@@ -42,7 +45,7 @@ export function useProspects() {
       alive = false;
       supabase.removeChannel(channel);
     };
-  }, [supabase]);
+  }, [supabase, uid]);
 
   // Para reflejar al momento un cambio propio sin esperar a Realtime.
   const upsertLocal = (row: Prospect) => setProspects((prev) => ({ ...prev, [row.id]: row }));
@@ -60,6 +63,9 @@ export function useProspects() {
 export function useProspectEvents(prospectId: string) {
   const [events, setEvents] = useState<ProspectEvent[] | null>(null);
   const supabase = useMemo(() => createClient(), []);
+  // Nombre de canal único por componente: si dos partes de la misma página
+  // piden el mismo canal, Supabase devuelve el ya suscrito y falla al añadirle escuchas.
+  const uid = useId();
 
   useEffect(() => {
     let alive = true;
@@ -75,7 +81,7 @@ export function useProspectEvents(prospectId: string) {
     // Los DELETE no se pueden filtrar por columna: se escuchan todos y se
     // descartan los ids que no están en esta lista.
     const channel = supabase
-      .channel(`prospect-events-${prospectId}`)
+      .channel(`prospect-events-${prospectId}-${uid}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "prospect_events", filter: `prospect_id=eq.${prospectId}` },
@@ -102,7 +108,7 @@ export function useProspectEvents(prospectId: string) {
       alive = false;
       supabase.removeChannel(channel);
     };
-  }, [prospectId, supabase]);
+  }, [prospectId, supabase, uid]);
 
   const addLocal = (row: ProspectEvent) => setEvents((prev) => [row, ...(prev || []).filter((e) => e.id !== row.id)]);
   const removeLocal = (id: string) => setEvents((prev) => (prev || []).filter((e) => e.id !== id));

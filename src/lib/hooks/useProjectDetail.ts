@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { FileRow, Note, Project, ProjectLink, ScopeItem, Task } from "@/lib/database.types";
 
 export function useProject(id: string) {
   const [project, setProject] = useState<Project | null | undefined>(undefined); // undefined = loading
   const supabase = useMemo(() => createClient(), []);
+  // Nombre de canal único por componente: si dos partes de la misma página
+  // piden el mismo canal, Supabase devuelve el ya suscrito y falla al añadirle escuchas.
+  const uid = useId();
 
   useEffect(() => {
     let alive = true;
@@ -23,7 +26,7 @@ export function useProject(id: string) {
       });
 
     const channel = supabase
-      .channel("project-" + id)
+      .channel(`project-${id}-${uid}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "projects", filter: `id=eq.${id}` },
@@ -38,7 +41,7 @@ export function useProject(id: string) {
       alive = false;
       supabase.removeChannel(channel);
     };
-  }, [id, supabase]);
+  }, [id, supabase, uid]);
 
   return project;
 }
@@ -47,6 +50,9 @@ function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "
   const [rows, setRows] = useState<Record<string, T>>({});
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
+  // Nombre de canal único por componente: si dos partes de la misma página
+  // piden el mismo canal, Supabase devuelve el ya suscrito y falla al añadirle escuchas.
+  const uid = useId();
 
   useEffect(() => {
     let alive = true;
@@ -71,7 +77,7 @@ function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "
     // el registro borrado solo trae el id), así que se escuchan sin filtro y
     // se descartan los ids que no son de este proyecto.
     const channel = supabase
-      .channel(`${table}-${projectId}`)
+      .channel(`${table}-${projectId}-${uid}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table, filter: `project_id=eq.${projectId}` },
@@ -97,7 +103,7 @@ function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "
       alive = false;
       supabase.removeChannel(channel);
     };
-  }, [table, projectId, orderCol, supabase]);
+  }, [table, projectId, orderCol, supabase, uid]);
 
   // Para reflejar al momento un cambio propio sin esperar a Realtime.
   const removeLocal = (id: string) =>

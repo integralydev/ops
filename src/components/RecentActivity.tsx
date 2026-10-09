@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
@@ -51,6 +51,7 @@ export function RecentActivity({
   const [limit, setLimit] = useState(pageSize);
   const [hasMore, setHasMore] = useState(false);
   const supabase = useMemo(() => createClient(), []);
+  const uid = useId(); // canal único por componente
 
   useEffect(() => {
     let alive = true;
@@ -72,7 +73,7 @@ export function RecentActivity({
 
   useEffect(() => {
     const channel = supabase
-      .channel("recent-activity")
+      .channel(`recent-activity-${uid}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity" }, (payload) => {
         const row = payload.new as Activity;
         setItems((prev) => [row, ...(prev || []).filter((a) => a.id !== row.id)].slice(0, limit));
@@ -81,7 +82,7 @@ export function RecentActivity({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, limit]);
+  }, [supabase, limit, uid]);
 
   function describe(a: Activity) {
     const d = a.data || {};

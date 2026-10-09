@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Project, ProjectLink } from "@/lib/database.types";
 
@@ -8,6 +8,9 @@ export function useProjects() {
   const [projects, setProjects] = useState<Record<string, Project>>({});
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
+  // Nombre de canal único por componente: si dos partes de la misma página
+  // piden el mismo canal, Supabase devuelve el ya suscrito y falla al añadirle escuchas.
+  const uid = useId();
 
   useEffect(() => {
     let alive = true;
@@ -34,7 +37,7 @@ export function useProjects() {
     window.addEventListener("focus", onFocus);
 
     const channel = supabase
-      .channel("projects-list")
+      .channel(`projects-list-${uid}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, (payload) => {
         setProjects((prev) => {
           const next = { ...prev };
@@ -58,7 +61,7 @@ export function useProjects() {
       window.removeEventListener("focus", onFocus);
       supabase.removeChannel(channel);
     };
-  }, [supabase]);
+  }, [supabase, uid]);
 
   return { projects, loading };
 }
@@ -68,6 +71,9 @@ export function useProjects() {
 export function useFeaturedLinks() {
   const [byId, setById] = useState<Record<string, ProjectLink>>({});
   const supabase = useMemo(() => createClient(), []);
+  // Nombre de canal único por componente: si dos partes de la misma página
+  // piden el mismo canal, Supabase devuelve el ya suscrito y falla al añadirle escuchas.
+  const uid = useId();
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +89,7 @@ export function useFeaturedLinks() {
       });
 
     const channel = supabase
-      .channel("featured-links")
+      .channel(`featured-links-${uid}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "project_links" }, (payload) => {
         setById((prev) => {
           const next = { ...prev };
@@ -102,7 +108,7 @@ export function useFeaturedLinks() {
       alive = false;
       supabase.removeChannel(channel);
     };
-  }, [supabase]);
+  }, [supabase, uid]);
 
   // Por proyecto
   return useMemo(() => {
