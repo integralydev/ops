@@ -227,3 +227,24 @@ export interface ProjectLink {
   created_at: string;
   updated_at: string;
 }
+
+// Acceso de una persona externa a un sistema de un proyecto (solo admin y
+// director). Nunca credenciales: solo que el acceso existe y dónde.
+export type AccessLevel = "lectura" | "escritura" | "admin" | "propietario";
+
+export interface ProjectAccess {
+  id: string;
+  project_id: string;
+  person: string;
+  company: string;
+  system: string;
+  level: AccessLevel;
+  granted_by: string | null;
+  granted_at: string;
+  /** Fecha de revocación; null = sigue activo. */
+  revoked_at: string | null;
+  revoked_by: string | null;
+  revoke_how: string;
+  created_by: string | null;
+  created_at: string;
+}

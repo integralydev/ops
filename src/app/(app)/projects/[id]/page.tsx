@@ -10,6 +10,7 @@ import { FilesTab } from "@/components/project/FilesTab";
 import { NotesTab } from "@/components/project/NotesTab";
 import { ScopeTab } from "@/components/project/ScopeTab";
 import { LinksTab } from "@/components/project/LinksTab";
+import { AccessTab } from "@/components/project/AccessTab";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 
 const TABS = [
@@ -18,6 +19,7 @@ const TABS = [
   ["tareas", "Tareas"],
   ["archivos", "Archivos"],
   ["enlaces", "Enlaces"],
+  ["accesos", "Accesos externos"], // solo admin y director
   ["actualizaciones", "Actualizaciones"],
 ] as const;
 
@@ -78,7 +80,7 @@ export default function ProjectDetailPage() {
       </div>
       <div className="content wide">
         <div className="tabs">
-          {TABS.map(([key, label]) => (
+          {TABS.filter(([key]) => key !== "accesos" || isStaff).map(([key, label]) => (
             <button
               key={key}
               className={"tab" + (tab === key ? " active" : "")}
@@ -94,6 +96,8 @@ export default function ProjectDetailPage() {
           <TasksTab project={project} />
         ) : tab === "archivos" ? (
           <FilesTab project={project} />
+        ) : tab === "accesos" && isStaff ? (
+          <AccessTab project={project} />
         ) : tab === "enlaces" ? (
           <LinksTab project={project} />
         ) : tab === "actualizaciones" ? (

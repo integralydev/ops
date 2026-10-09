@@ -1,4 +1,5 @@
 import type {
+  AccessLevel,
   Client,
   ClientContact,
   ClientStatus,
@@ -160,6 +161,40 @@ export function linkCredentialProblem(url: string): string | null {
 /** Enlaces de Google Docs/Sheets/Drive: pueden estar compartidos con "cualquiera con el enlace". */
 export function isGoogleShareLink(url: string) {
   return /^https?:\/\/(docs|drive|sheets)\.google\.com\//i.test(url.trim());
+}
+
+// Accesos externos de un proyecto
+export const ACCESS_LEVELS: { value: AccessLevel; label: string }[] = [
+  { value: "lectura", label: "Lectura" },
+  { value: "escritura", label: "Escritura" },
+  { value: "admin", label: "Admin" },
+  { value: "propietario", label: "Propietario" },
+];
+/** Sugerencias para el campo "sistema" (se puede escribir cualquier otro). */
+export const ACCESS_SYSTEMS = [
+  "Google Cloud (GCP)",
+  "GitHub",
+  "Vercel",
+  "Supabase",
+  "WooCommerce",
+  "WordPress",
+  "Shopify",
+  "Hosting",
+  "Dominio / DNS",
+  "Google Workspace",
+  "Base de datos",
+];
+
+/**
+ * ¿El texto parece una credencial? Misma regla que la base de datos
+ * (looks_like_secret), para avisar antes de guardar.
+ */
+export function looksLikeSecret(t: string) {
+  return (
+    /(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|xox[abprs]-[A-Za-z0-9-]{10,}|-----BEGIN|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/.test(t) ||
+    /(password|passwd|contrase(ñ|n)a|pwd)\s*[:=]/i.test(t) ||
+    /(api[ _-]?key|token|secret|clave)\s*[:=]\s*[A-Za-z0-9_-]{12,}/i.test(t)
+  );
 }
 
 /** Dominio de una URL, para mostrarlo debajo del nombre del enlace. */
