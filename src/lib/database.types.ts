@@ -80,6 +80,12 @@ export interface Task {
   assigned_to_client: boolean;
   done: boolean;
   done_at: string | null;
+  /** Columna "En curso" del tablero ("Hecha" es done). */
+  in_progress: boolean;
+  due_date: string | null;
+  description: string;
+  /** Orden manual: menor = más arriba. */
+  position: number;
   created_at: string;
   created_by: string | null;
 }

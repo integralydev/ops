@@ -67,6 +67,12 @@ create table if not exists tasks (
   assigned_to_client boolean not null default false,
   done boolean not null default false,
   done_at timestamptz,
+  -- columna "En curso" del tablero ("Hecha" es done)
+  in_progress boolean not null default false,
+  due_date date,
+  description text not null default '',
+  -- orden manual (arrastrar): menor = más arriba
+  position double precision not null default -extract(epoch from now()),
   created_at timestamptz not null default now(),
   created_by uuid references auth.users (id)
 );
@@ -862,3 +868,27 @@ begin
     alter publication supabase_realtime add table project_accesses;
   end if;
 end $$;
+
+-- ===========================================================================
+-- Tareas al estilo Notion (ver migrations/2026-10-10_tareas_estilo_notion.sql)
+-- ===========================================================================
+
+create index if not exists tasks_project_position_idx on tasks (project_id, position);
+
+create or replace function move_task(tid uuid, pos double precision)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  pid uuid;
+begin
+  select project_id into pid from tasks where id = tid;
+  if pid is null or not is_project_member(pid) then
+    raise exception 'No tienes acceso a esta tarea';
+  end if;
+  update tasks set position = pos where id = tid;
+end;
+$$;
+grant execute on function move_task(uuid, double precision) to authenticated;
