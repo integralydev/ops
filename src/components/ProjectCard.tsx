@@ -14,7 +14,7 @@ export function ProjectCard({ project, featured }: { project: Project; featured?
       <div className="proj-top">
         <div>
           <div className="proj-name">{client ? client.name : project.name}</div>
-          <div className="proj-client">{client ? project.name : "Sin cliente"}</div>
+          <div className="proj-client">{client ? project.name : project.kind === "laboratorio" ? "🧪 Laboratorio" : "Sin cliente"}</div>
         </div>
         <span className={`badge badge-${project.status}`}>
           <span className="badge-dot" />

@@ -12,6 +12,10 @@ import { ScopeTab } from "@/components/project/ScopeTab";
 import { LinksTab } from "@/components/project/LinksTab";
 import { AccessTab } from "@/components/project/AccessTab";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
+import { kindOf } from "@/lib/format";
+
+// Un proyecto de laboratorio no tiene alcance pactado ni accesos de terceros
+const LAB_HIDDEN_TABS: string[] = ["scope", "accesos"];
 
 const TABS = [
   ["resumen", "Resumen"],
@@ -55,14 +59,23 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const isLab = kindOf(project) === "laboratorio";
+
   return (
     <>
       <div className="topbar">
         <div>
-          {/* El cliente es lo que se busca: va como título; el proyecto, debajo */}
+          {/* El cliente es lo que se busca: va como título; el proyecto, debajo.
+              En laboratorio no hay cliente: título = producto. */}
           <h1>{project.client_id && clients[project.client_id] ? clients[project.client_id].name : project.name}</h1>
           <div className="topbar-sub">
-            {project.client_id && clients[project.client_id] ? project.name : "Sin cliente"}
+            {isLab ? (
+              <span className="lab-tag">🧪 Laboratorio · producto propio</span>
+            ) : project.client_id && clients[project.client_id] ? (
+              project.name
+            ) : (
+              "Sin cliente"
+            )}
           </div>
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -80,7 +93,7 @@ export default function ProjectDetailPage() {
       </div>
       <div className="content wide">
         <div className="tabs">
-          {TABS.filter(([key]) => key !== "accesos" || isStaff).map(([key, label]) => (
+          {TABS.filter(([key]) => (key !== "accesos" || isStaff) && !(isLab && LAB_HIDDEN_TABS.includes(key))).map(([key, label]) => (
             <button
               key={key}
               className={"tab" + (tab === key ? " active" : "")}
@@ -90,7 +103,9 @@ export default function ProjectDetailPage() {
             </button>
           ))}
         </div>
-        {tab === "scope" ? (
+        {isLab && LAB_HIDDEN_TABS.includes(tab) ? (
+          <ResumenTab project={project} />
+        ) : tab === "scope" ? (
           <ScopeTab project={project} />
         ) : tab === "tareas" ? (
           <TasksTab project={project} />

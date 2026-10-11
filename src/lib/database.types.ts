@@ -10,7 +10,17 @@ export const ROLE_LABELS: Record<Role, string> = {
   developer: "Developer",
   comercial: "Comercial",
 };
+/** cliente: lo de siempre · laboratorio: producto propio (SaaS), sin cliente */
+export type ProjectKind = "cliente" | "laboratorio";
+
 export type ProjectStatus =
+  // laboratorio
+  | "idea"
+  | "construccion"
+  | "validacion"
+  | "escalado"
+  | "aparcado"
+  // cliente
   | "descubrimiento"
   | "propuesta"
   | "presupuesto"
@@ -55,6 +65,7 @@ export interface Client {
 export interface Project {
   id: string;
   name: string;
+  kind: ProjectKind;
   client_id: string | null;
   status: ProjectStatus;
   owner_id: string | null;

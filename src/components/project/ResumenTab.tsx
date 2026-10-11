@@ -6,7 +6,7 @@ import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import { fmtDate, fmtDateTime, fmtRelative, statusLabel } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtRelative, kindOf, statusLabel } from "@/lib/format";
 import { useNotes } from "@/lib/hooks/useProjectDetail";
 import { UpdateImages } from "@/components/project/UpdateImages";
 import type { Project } from "@/lib/database.types";
@@ -170,18 +170,29 @@ export function ResumenTab({ project }: { project: Project }) {
         )}
       </div>
       <div className="card pad">
-        <div className="section-title" style={{ marginTop: 0 }}>
-          Cliente
-        </div>
-        <div style={{ fontSize: 13.6 }}>
-          {client ? (
-            <Link href={`/clients/${project.client_id}`} style={{ fontWeight: 600 }}>
-              {client.name}
-            </Link>
-          ) : (
-            <span className="muted">Sin cliente asignado</span>
-          )}
-        </div>
+        {kindOf(project) === "laboratorio" ? (
+          <>
+            <div className="section-title" style={{ marginTop: 0 }}>
+              Tipo
+            </div>
+            <div style={{ fontSize: 13.6 }}>🧪 Laboratorio · producto propio</div>
+          </>
+        ) : (
+          <>
+            <div className="section-title" style={{ marginTop: 0 }}>
+              Cliente
+            </div>
+            <div style={{ fontSize: 13.6 }}>
+              {client ? (
+                <Link href={`/clients/${project.client_id}`} style={{ fontWeight: 600 }}>
+                  {client.name}
+                </Link>
+              ) : (
+                <span className="muted">Sin cliente asignado</span>
+              )}
+            </div>
+          </>
+        )}
         <div className="section-title">Encargado</div>
         <div className="row" style={{ fontSize: 13.4 }}>
           <Avatar id={project.owner_id || ""} name={nameFor(project.owner_id)} size={22} />

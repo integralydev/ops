@@ -7,6 +7,7 @@ import { useFiles, useTasks } from "@/lib/hooks/useProjectDetail";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import type { FileRow, Project, Task } from "@/lib/database.types";
+import { kindOf } from "@/lib/format";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskPanel } from "@/components/project/tasks/TaskPanel";
 import {
@@ -70,6 +71,8 @@ export function TasksTab({ project }: { project: Project }) {
 
   const client = project.client_id ? clients[project.client_id] : null;
   const clientLabel = client ? client.name : "Cliente";
+  // Laboratorio: producto propio, no hay cliente al que asignar tareas
+  const hasClient = kindOf(project) !== "laboratorio";
 
   // Encargado, developers del proyecto y siempre admins/directores
   const staffIds = Object.values(team)
@@ -84,7 +87,7 @@ export function TasksTab({ project }: { project: Project }) {
     return (
       <>
         <option value="">Sin asignar</option>
-        <option value={CLIENT}>🏢 {clientLabel}</option>
+        {hasClient && <option value={CLIENT}>🏢 {clientLabel}</option>}
         {ids.map((a) => (
           <option key={a} value={a}>
             {nameFor(a)}
@@ -114,7 +117,7 @@ export function TasksTab({ project }: { project: Project }) {
   const filters: { key: Filter; label: string }[] = [
     { key: "all", label: "Todas" },
     { key: "mine", label: "Mías" },
-    { key: "client", label: `🏢 ${clientLabel}` },
+    ...(hasClient ? [{ key: "client" as Filter, label: `🏢 ${clientLabel}` }] : []),
     ...people.map((id) => ({ key: id, label: nameFor(id) })),
     { key: "none", label: "Sin asignar" },
     ...(pendingCount("overdue") ? [{ key: "overdue" as Filter, label: "⏰ Vencidas" }] : []),

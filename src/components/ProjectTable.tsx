@@ -52,7 +52,7 @@ export function ProjectTable({
                       {client ? client.name : p.name}
                     </Link>
                     <div className="ptable-sub">
-                      {client ? p.name : "Sin cliente"}
+                      {client ? p.name : p.kind === "laboratorio" ? "🧪 Laboratorio" : "Sin cliente"}
                       {featured[p.id] && (
                         <a
                           className="demo-link"

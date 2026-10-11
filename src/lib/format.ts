@@ -4,6 +4,7 @@ import type {
   ClientContact,
   ClientStatus,
   LinkCategory,
+  ProjectKind,
   ProjectStatus,
   ProspectSource,
   ProspectStatus,
@@ -71,6 +72,34 @@ export const PROJECT_STATUSES: {
   { value: "pausado", label: "Pausado", group: "otros", hint: "En espera" },
   { value: "cerrado", label: "Cerrado", group: "otros", hint: "Terminado o presupuesto no aceptado" },
 ];
+
+// Estados de un proyecto de laboratorio (producto propio, sin cliente)
+export const LAB_STATUSES: { value: ProjectStatus; label: string; hint: string }[] = [
+  { value: "idea", label: "Idea", hint: "Definiendo qué es y para quién" },
+  { value: "construccion", label: "Construcción", hint: "Desarrollando la primera versión" },
+  { value: "validacion", label: "Validación", hint: "Probándolo con usuarios reales" },
+  { value: "escalado", label: "Escalado", hint: "Funciona: a por más usuarios" },
+  { value: "aparcado", label: "Aparcado", hint: "En pausa" },
+];
+
+export const PROJECT_KINDS: { value: ProjectKind; label: string; icon: string }[] = [
+  { value: "cliente", label: "Cliente", icon: "🏢" },
+  { value: "laboratorio", label: "Laboratorio", icon: "🧪" },
+];
+
+/** Tipo de un proyecto (los anteriores a laboratorio llegan sin kind: son de cliente). */
+export function kindOf(p: { kind?: ProjectKind | null }): ProjectKind {
+  return p.kind === "laboratorio" ? "laboratorio" : "cliente";
+}
+
+/** Primer estado de cada tipo: al crear o al cambiar de tipo. */
+export function firstStatusOf(kind: ProjectKind): ProjectStatus {
+  return kind === "laboratorio" ? "idea" : "descubrimiento";
+}
+
+export function isLabStatus(s: string) {
+  return LAB_STATUSES.some((x) => x.value === s);
+}
 
 export const STATUS_GROUP_LABELS = {
   comercial: "Preventa",
@@ -214,7 +243,7 @@ export function normalizeUrl(url?: string | null) {
 }
 
 export function statusLabel(s: string) {
-  return PROJECT_STATUSES.find((x) => x.value === s)?.label ?? s;
+  return (PROJECT_STATUSES.find((x) => x.value === s) || LAB_STATUSES.find((x) => x.value === s))?.label ?? s;
 }
 
 export function fileGlyph(ct?: string | null) {

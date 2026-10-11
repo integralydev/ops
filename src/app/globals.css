@@ -133,6 +133,25 @@ button{font-family:inherit;}
 .badge-mantenimiento{background:var(--surface); color:var(--success); border:1px solid var(--success-soft);}
 .badge-pausado{background:var(--warning-soft); color:var(--warning);}
 .badge-cerrado{background:var(--surface-2); color:var(--ink-faint); border:1px solid var(--border);}
+.badge-idea{background:var(--surface-2); color:var(--ink-soft); border:1px solid var(--border);}
+.badge-construccion{background:#EEF2FF; color:#4C46E0;}
+.badge-validacion{background:#FDF2F8; color:#BE185D;}
+.badge-escalado{background:var(--success-soft); color:var(--success);}
+.badge-aparcado{background:var(--surface-2); color:var(--ink-faint); border:1px solid var(--border);}
+:root[data-theme="dark"] .badge-construccion{background:#23234A; color:#A5A0FF;}
+:root[data-theme="dark"] .badge-validacion{background:#3A1A2C; color:#F08CC0;}
+.lab-tag{display:inline-block; padding:1px 8px; border-radius:99px; background:#EEF2FF; color:#4C46E0; font-size:11.8px; font-weight:600;}
+:root[data-theme="dark"] .lab-tag{background:#23234A; color:#A5A0FF;}
+.kind-seg{display:flex; width:max-content;}
+.kind-tabs{margin-bottom:18px;}
+.kind-count{display:inline-block; min-width:18px; margin-left:6px; padding:0 6px; border-radius:99px; background:var(--surface-2); color:var(--ink-soft); font-size:11px; text-align:center;}
+.lab-list{overflow:hidden;}
+.lab-row{display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--border); color:inherit;}
+.lab-row:last-child{border-bottom:none;}
+.lab-row:hover{background:var(--surface-2);}
+.lab-name{font-weight:700; font-size:14px; letter-spacing:-.01em; white-space:nowrap;}
+.lab-next{flex:1; min-width:0; font-size:12.6px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.lab-row .badge{margin-left:auto;}
 .badge-dot{width:6px; height:6px; border-radius:50%; background:currentColor;}
 .next-step{background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-size:12.7px; color:var(--ink-soft);}
 .next-step b{color:var(--ink); font-weight:600;}

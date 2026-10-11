@@ -8,7 +8,8 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectTable } from "@/components/ProjectTable";
 import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
-import { PROJECT_STATUSES } from "@/lib/format";
+import { LAB_STATUSES, PROJECT_STATUSES, kindOf } from "@/lib/format";
+import type { ProjectKind } from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/client";
 
 type View = "table" | "cards" | "timeline";
@@ -34,6 +35,16 @@ function saveView(v: View) {
   window.dispatchEvent(new Event("projects-view"));
 }
 
+// Tipo de proyectos que se ven: ?tipo=laboratorio en la dirección; por defecto, cliente
+const noSubscribe = () => () => {};
+function readKind(): ProjectKind {
+  try {
+    return new URLSearchParams(window.location.search).get("tipo") === "laboratorio" ? "laboratorio" : "cliente";
+  } catch {
+    return "cliente";
+  }
+}
+
 export default function ProjectsPage() {
   const { isStaff } = useAppData();
   const { projects, loading } = useProjects();
@@ -43,12 +54,25 @@ export default function ProjectsPage() {
   const [lastUpdates, setLastUpdates] = useState<
     Record<string, { author_id: string | null; text: string; created_at: string }>
   >({});
-  const view = useSyncExternalStore(subscribeView, readView, () => "table" as View);
+  const storedView = useSyncExternalStore(subscribeView, readView, () => "table" as View);
+  const urlKind = useSyncExternalStore(noSubscribe, readKind, () => "cliente" as ProjectKind);
+  const [kindChoice, setKindChoice] = useState<ProjectKind | null>(null);
+  const kind = kindChoice ?? urlKind;
   const router = useRouter();
-  const all = Object.values(projects);
+  const everything = Object.values(projects);
+  // Cliente y laboratorio nunca se mezclan: se ve uno u otro
+  const all = everything.filter((p) => kindOf(p) === kind);
+  const countOf = (k: ProjectKind) => everything.filter((p) => kindOf(p) === k).length;
+  // La línea temporal es del proceso con clientes
+  const view = kind === "laboratorio" && storedView === "timeline" ? "table" : storedView;
+
+  function changeKind(k: ProjectKind) {
+    setKindChoice(k);
+    router.replace(k === "laboratorio" ? "/projects?tipo=laboratorio" : "/projects", { scroll: false });
+  }
 
   // Nº de tareas pendientes por proyecto (se recalcula si cambian los proyectos)
-  const projectCount = all.length;
+  const projectCount = everything.length;
   useEffect(() => {
     const supabase = createClient();
     supabase
@@ -80,7 +104,8 @@ export default function ProjectsPage() {
   }, [projectCount]);
 
   const groups = useMemo(() => {
-    const known = PROJECT_STATUSES.map(({ value, label }) => ({
+    const statuses = kind === "laboratorio" ? LAB_STATUSES : PROJECT_STATUSES;
+    const known = statuses.map(({ value, label }) => ({
       key: value as string,
       label,
       projects: all.filter((p) => p.status === value),
@@ -90,11 +115,11 @@ export default function ProjectsPage() {
     known.push({
       key: "__otros",
       label: "Sin estado asignado",
-      projects: all.filter((p) => !PROJECT_STATUSES.some((s) => s.value === p.status)),
+      projects: all.filter((p) => !statuses.some((s) => s.value === p.status)),
     });
     return known.filter((g) => g.projects.length > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects]);
+  }, [projects, kind]);
 
   return (
     <>
@@ -111,9 +136,11 @@ export default function ProjectsPage() {
             <button className={view === "cards" ? "active" : ""} onClick={() => saveView("cards")}>
               Tarjetas
             </button>
-            <button className={view === "timeline" ? "active" : ""} onClick={() => saveView("timeline")}>
-              Línea temporal
-            </button>
+            {kind === "cliente" && (
+              <button className={view === "timeline" ? "active" : ""} onClick={() => saveView("timeline")}>
+                Línea temporal
+              </button>
+            )}
           </div>
           {isStaff && (
             <button className="btn btn-primary" onClick={() => setShowNew(true)}>
@@ -123,13 +150,25 @@ export default function ProjectsPage() {
         </div>
       </div>
       <div className="content">
+        <div className="tabs kind-tabs">
+          <button className={"tab" + (kind === "cliente" ? " active" : "")} onClick={() => changeKind("cliente")}>
+            🏢 Clientes <span className="kind-count">{countOf("cliente")}</span>
+          </button>
+          <button className={"tab" + (kind === "laboratorio" ? " active" : "")} onClick={() => changeKind("laboratorio")}>
+            🧪 Laboratorio <span className="kind-count">{countOf("laboratorio")}</span>
+          </button>
+        </div>
         {loading ? (
           <div className="empty">Cargando…</div>
         ) : all.length === 0 ? (
           <div className="empty">
-            {isStaff
-              ? 'Todavía no hay proyectos. Crea el primero con "+ Nuevo proyecto".'
-              : "No tienes proyectos asignados todavía."}
+            {kind === "laboratorio"
+              ? isStaff
+                ? 'Todavía no hay proyectos de laboratorio. Crea el primero con "+ Nuevo proyecto".'
+                : "No tienes proyectos de laboratorio asignados."
+              : isStaff
+                ? 'Todavía no hay proyectos. Crea el primero con "+ Nuevo proyecto".'
+                : "No tienes proyectos asignados todavía."}
           </div>
         ) : view === "timeline" ? (
           <ProjectTimeline projects={all} />
@@ -153,6 +192,7 @@ export default function ProjectsPage() {
 
       {showNew && (
         <ProjectFormModal
+          initialKind={kind}
           onClose={() => setShowNew(false)}
           onSaved={(id) => router.push(`/projects/${id}`)}
         />

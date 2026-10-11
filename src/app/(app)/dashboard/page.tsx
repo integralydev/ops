@@ -8,7 +8,7 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { RecentActivity } from "@/components/RecentActivity";
 import { useRouter } from "next/navigation";
-import { PROJECT_STATUSES } from "@/lib/format";
+import { LAB_STATUSES, PROJECT_STATUSES, kindOf, statusLabel } from "@/lib/format";
 import { pickGreeting } from "@/lib/greetings";
 
 // Saludo y fecha se calculan solo en el navegador (hora local de quien entra)
@@ -44,6 +44,9 @@ export default function DashboardPage() {
   const commercial = all.filter((p) => groupOf(p.status) === "comercial");
   const inDev = all.filter((p) => p.status === "desarrollo" || p.status === "testing");
   const live = all.filter((p) => p.status === "mantenimiento");
+  // Laboratorio: productos propios. Aparte y debajo: los clientes van primero
+  const labOrder = (s: string) => LAB_STATUSES.findIndex((x) => x.value === s);
+  const lab = all.filter((p) => kindOf(p) === "laboratorio").sort((a, b) => labOrder(a.status) - labOrder(b.status));
   const activeClients = Object.values(clients).filter((c) => c.status === "client");
   // "En curso": todo lo que no está pausado, cerrado ni ya en post go-live
   const active = [...commercial, ...inDev].sort((a, b) => order(a.status) - order(b.status));
@@ -111,6 +114,30 @@ export default function DashboardPage() {
                   <ProjectCard key={p.id} project={p} featured={featured[p.id]} />
                 ))}
               </div>
+            )}
+            {lab.length > 0 && (
+              <>
+                <div className="dash-section-head" style={{ marginTop: 26 }}>
+                  <div className="section-title">
+                    🧪 Laboratorio<span className="dash-count">{lab.length}</span>
+                  </div>
+                  <Link href="/projects?tipo=laboratorio" className="section-link">
+                    Ver todos →
+                  </Link>
+                </div>
+                <div className="card lab-list">
+                  {lab.map((p) => (
+                    <Link key={p.id} href={`/projects/${p.id}`} className="lab-row">
+                      <span className="lab-name">{p.name}</span>
+                      {p.next_step && <span className="lab-next">{p.next_step}</span>}
+                      <span className={`badge badge-${p.status}`}>
+                        <span className="badge-dot" />
+                        {statusLabel(p.status)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </>
             )}
           </section>
 

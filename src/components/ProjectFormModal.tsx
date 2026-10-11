@@ -6,17 +6,20 @@ import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import type { Project, ProjectStatus } from "@/lib/database.types";
-import { PROJECT_STATUSES, STATUS_GROUP_LABELS } from "@/lib/format";
+import type { Project, ProjectKind, ProjectStatus } from "@/lib/database.types";
+import { LAB_STATUSES, PROJECT_KINDS, PROJECT_STATUSES, STATUS_GROUP_LABELS, firstStatusOf, kindOf } from "@/lib/format";
 
 export function ProjectFormModal({
   project,
+  initialKind,
   initialClientId,
   initialName,
   onClose,
   onSaved,
 }: {
   project?: Project;
+  /** Para un proyecto nuevo: tipo con el que empieza (por defecto, cliente). */
+  initialKind?: ProjectKind;
   /** Para un proyecto nuevo: cliente ya elegido (p. ej. al cerrar una empresa en Comercial). */
   initialClientId?: string;
   initialName?: string;
@@ -38,11 +41,22 @@ export function ProjectFormModal({
   }
 
   const [name, setName] = useState(project?.name || initialName || "");
-  const [status, setStatus] = useState<ProjectStatus>(project?.status || "descubrimiento");
+  const [kind, setKind] = useState<ProjectKind>(project ? kindOf(project) : initialKind || "cliente");
+  const [status, setStatus] = useState<ProjectStatus>(project?.status || firstStatusOf(initialKind || "cliente"));
   const [clientId, setClientId] = useState(project?.client_id || initialClientId || "");
   const [ownerId, setOwnerId] = useState(
     project ? project.owner_id || "" : defaultOwnerFor("descubrimiento") || "",
   );
+
+  // Cambiar de tipo: cada tipo tiene sus estados, y laboratorio no lleva cliente
+  function changeKind(k: ProjectKind) {
+    if (k === kind) return;
+    if (k === "laboratorio" && clientId && !confirm("Un proyecto de laboratorio no tiene cliente. ¿Quitar el cliente de este proyecto?"))
+      return;
+    setKind(k);
+    if (k === "laboratorio") setClientId("");
+    changeStatus(firstStatusOf(k));
+  }
 
   function changeStatus(s: ProjectStatus) {
     setStatus(s);
@@ -68,7 +82,8 @@ export function ProjectFormModal({
     const payload = {
       name: name.trim(),
       status,
-      client_id: clientId || null,
+      kind,
+      client_id: kind === "laboratorio" ? null : clientId || null,
       owner_id: ownerId || null,
       developer_ids: devIds,
       next_step: nextStep,
@@ -114,6 +129,21 @@ export function ProjectFormModal({
       saving={saving}
     >
       <div className="field">
+        <label>Tipo</label>
+        <div className="seg kind-seg">
+          {PROJECT_KINDS.map((k) => (
+            <button key={k.value} type="button" className={kind === k.value ? "active" : ""} onClick={() => changeKind(k.value)}>
+              {k.icon} {k.label}
+            </button>
+          ))}
+        </div>
+        {kind === "laboratorio" && (
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            Producto propio, sin cliente: lo construimos nosotros para venderlo después.
+          </div>
+        )}
+      </div>
+      <div className="field">
         <label>Nombre del proyecto</label>
         <input
           type="text"
@@ -126,28 +156,36 @@ export function ProjectFormModal({
         <div className="field">
           <label>Estado</label>
           <select value={status} onChange={(e) => changeStatus(e.target.value as ProjectStatus)}>
-            {(Object.keys(STATUS_GROUP_LABELS) as (keyof typeof STATUS_GROUP_LABELS)[]).map((g) => (
-              <optgroup key={g} label={STATUS_GROUP_LABELS[g]}>
-                {PROJECT_STATUSES.filter((s) => s.group === g).map((s) => (
+            {kind === "laboratorio"
+              ? LAB_STATUSES.map((s) => (
                   <option key={s.value} value={s.value} title={s.hint}>
                     {s.label}
                   </option>
+                ))
+              : (Object.keys(STATUS_GROUP_LABELS) as (keyof typeof STATUS_GROUP_LABELS)[]).map((g) => (
+                  <optgroup key={g} label={STATUS_GROUP_LABELS[g]}>
+                    {PROJECT_STATUSES.filter((s) => s.group === g).map((s) => (
+                      <option key={s.value} value={s.value} title={s.hint}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
-              </optgroup>
-            ))}
           </select>
         </div>
-        <div className="field">
-          <label>Cliente</label>
-          <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-            <option value="">Sin cliente</option>
-            {Object.entries(clients).map(([id, c]) => (
-              <option key={id} value={id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {kind === "cliente" && (
+          <div className="field">
+            <label>Cliente</label>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">Sin cliente</option>
+              {Object.entries(clients).map(([id, c]) => (
+                <option key={id} value={id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <div className="field">
         <label>Encargado</label>

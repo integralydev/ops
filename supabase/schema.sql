@@ -42,7 +42,10 @@ create table if not exists projects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   client_id uuid references clients (id) on delete set null,
-  status text not null default 'descubrimiento' check (status in ('descubrimiento', 'propuesta', 'presupuesto', 'desarrollo', 'testing', 'mantenimiento', 'pausado', 'cerrado')),
+  -- 'cliente' (por defecto) o 'laboratorio' (producto propio, sin cliente)
+  kind text not null default 'cliente' constraint projects_kind_check check (kind in ('cliente', 'laboratorio')),
+  -- cada tipo tiene sus estados (ver projects_status_check más abajo)
+  status text not null default 'descubrimiento',
   owner_id uuid references auth.users (id),
   developer_ids uuid[] not null default '{}',
   next_step text default '',
@@ -892,3 +895,16 @@ begin
 end;
 $$;
 grant execute on function move_task(uuid, double precision) to authenticated;
+
+-- ===========================================================================
+-- Proyectos de laboratorio (ver migrations/2026-10-11_proyectos_laboratorio.sql)
+-- ===========================================================================
+
+alter table projects drop constraint if exists projects_status_check;
+alter table projects add constraint projects_status_check check (
+  (kind = 'cliente' and status in ('descubrimiento', 'propuesta', 'presupuesto', 'desarrollo', 'testing', 'mantenimiento', 'pausado', 'cerrado'))
+  or (kind = 'laboratorio' and status in ('idea', 'construccion', 'validacion', 'escalado', 'aparcado'))
+);
+
+alter table projects drop constraint if exists projects_lab_no_client;
+alter table projects add constraint projects_lab_no_client check (kind = 'cliente' or client_id is null);
