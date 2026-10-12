@@ -105,9 +105,13 @@ export default function ProjectsPage() {
 
   const groups = useMemo(() => {
     const statuses = kind === "laboratorio" ? LAB_STATUSES : PROJECT_STATUSES;
+    // Las fases del proceso llevan número para que se vea el orden; pausado,
+    // cerrado y aparcado no son fases, van sin número al final.
+    const offFlow = ["pausado", "cerrado", "aparcado"];
+    let n = 0;
     const known = statuses.map(({ value, label }) => ({
       key: value as string,
-      label,
+      label: offFlow.includes(value) ? label : `${++n}. ${label}`,
       projects: all.filter((p) => p.status === value),
     }));
     // Red de seguridad: proyectos con un estado que no está en la lista
