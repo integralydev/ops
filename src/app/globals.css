@@ -248,12 +248,21 @@ a.dash-stat:hover{border-color:var(--ink-faint);}
 .tasks-caret{display:inline-block; transition:transform .15s ease;}
 .tasks-caret.open{transform:rotate(90deg);}
 
-.task-board{display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:12px; overflow-x:auto; padding-bottom:4px;}
-.task-col{background:var(--surface-2); border-radius:10px; padding:10px; min-height:140px;}
+.task-board{display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:12px; overflow-x:auto; padding-bottom:6px;}
+.task-col{background:var(--surface-2); border-radius:10px; padding:10px; min-height:140px; min-width:0;}
 .task-col-head{display:flex; align-items:center; gap:7px; font-size:12.6px; font-weight:700; color:var(--ink); padding:2px 4px 10px;}
 .task-status-dot{width:8px; height:8px; border-radius:50%; background:var(--ink-faint);}
+.task-status-dot.is-next{background:#0E7490;}
 .task-status-dot.is-doing{background:var(--accent);}
-.task-status-dot.is-done{background:var(--success);}
+.task-status-dot.is-testing{background:var(--warning);}
+.task-status-dot.is-deploy{background:#BE185D;}
+.task-status-dot.is-production{background:var(--success);}
+.task-pill.is-next{background:#E3F3F7; color:#0E7490;}
+.task-pill.is-testing{background:var(--warning-soft); color:var(--warning);}
+.task-pill.is-deploy{background:#FDF2F8; color:#BE185D;}
+:root[data-theme="dark"] .task-pill.is-next{background:#123640; color:#5CC6DB;}
+:root[data-theme="dark"] .task-pill.is-deploy{background:#3A1A2C; color:#F08CC0;}
+.task-next-count.is-over{color:var(--warning); font-weight:700;}
 .task-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:9px 10px; margin-bottom:8px; cursor:grab; box-shadow:var(--shadow);}
 .task-card:hover{border-color:var(--ink-faint);}
 .task-card.is-dragging{opacity:.4;}
@@ -261,7 +270,7 @@ a.dash-stat:hover{border-color:var(--ink-faint);}
 .task-card-title{font-size:13.3px; color:var(--ink); line-height:1.4; word-break:break-word;}
 .task-card-meta{display:flex; align-items:center; gap:8px; margin-top:7px; font-size:11.8px; min-height:20px;}
 @media (max-width:820px){
-  .task-board{grid-template-columns:repeat(3,minmax(240px,82vw));}
+  .task-board{grid-template-columns:none !important; grid-auto-flow:column; grid-auto-columns:minmax(240px,82vw);}
 }
 
 .task-panel-back{position:fixed; inset:0; z-index:60; background:rgba(15,16,22,.18); display:flex; justify-content:flex-end;}
@@ -274,9 +283,14 @@ a.dash-stat:hover{border-color:var(--ink-faint);}
 .task-props dt{color:var(--ink-faint); font-size:12.6px;}
 .task-props dd{margin:0; min-height:28px; display:flex; align-items:center;}
 .task-status-select{font-family:inherit; font-size:12.3px; font-weight:600; padding:4px 24px 4px 10px; border-radius:99px; border:1px solid transparent; background-position:right 8px center; background-size:10px;}
-.task-status-select.is-todo{background-color:var(--surface-2); color:var(--ink-soft); border-color:var(--border);}
+.task-status-select.is-backlog{background-color:var(--surface-2); color:var(--ink-soft); border-color:var(--border);}
+.task-status-select.is-next{background-color:#E3F3F7; color:#0E7490;}
 .task-status-select.is-doing{background-color:var(--accent-soft); color:var(--accent-dim);}
-.task-status-select.is-done{background-color:var(--success-soft); color:var(--success);}
+.task-status-select.is-testing{background-color:var(--warning-soft); color:var(--warning);}
+.task-status-select.is-deploy{background-color:#FDF2F8; color:#BE185D;}
+.task-status-select.is-production{background-color:var(--success-soft); color:var(--success);}
+:root[data-theme="dark"] .task-status-select.is-next{background-color:#123640; color:#5CC6DB;}
+:root[data-theme="dark"] .task-status-select.is-deploy{background-color:#3A1A2C; color:#F08CC0;}
 .task-date-input{padding:5px 8px; border:1px solid var(--border); border-radius:7px; background-color:var(--surface); color:var(--ink); font-size:12.6px; font-family:inherit;}
 .task-panel-section{margin:22px 0 8px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.1em; font-weight:700; color:var(--ink-faint);}
 .task-panel-desc{width:100%; min-height:140px; border:1px solid transparent; border-radius:8px; padding:8px 10px; margin:0 -10px; background:none; color:var(--ink); font-size:13.6px; line-height:1.6; font-family:inherit; resize:vertical; field-sizing:content;}

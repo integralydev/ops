@@ -74,6 +74,8 @@ create table if not exists tasks (
   in_progress boolean not null default false,
   due_date date,
   description text not null default '',
+  -- fase: backlog → next → doing → testing → deploy → production (= done)
+  stage text not null default 'backlog' check (stage in ('backlog', 'next', 'doing', 'testing', 'deploy', 'production')),
   -- orden manual (arrastrar): menor = más arriba
   position double precision not null default -extract(epoch from now()),
   created_at timestamptz not null default now(),
@@ -908,3 +910,47 @@ alter table projects add constraint projects_status_check check (
 
 alter table projects drop constraint if exists projects_lab_no_client;
 alter table projects add constraint projects_lab_no_client check (kind = 'cliente' or client_id is null);
+
+-- ===========================================================================
+-- Fases de las tareas (ver migrations/2026-10-12_fases_tareas.sql)
+-- done / in_progress se sincronizan solos con stage.
+-- ===========================================================================
+
+create or replace function trg_tasks_sync_stage()
+returns trigger
+language plpgsql
+as $$
+begin
+  -- Alta sin fase explícita pero marcada como hecha / en curso (versiones
+  -- antiguas de la app o scripts): la fase sale de esas marcas
+  if tg_op = 'INSERT' and new.stage = 'backlog' and (new.done or new.in_progress) then
+    new.stage := case when new.done then 'production' else 'doing' end;
+  end if;
+
+  if tg_op = 'INSERT' or new.stage is distinct from old.stage then
+    -- Manda la fase
+    new.done := new.stage = 'production';
+    new.in_progress := new.stage = 'doing';
+  elsif new.done is distinct from old.done or new.in_progress is distinct from old.in_progress then
+    -- Alguien ha tocado done / in_progress directamente: se ajusta la fase
+    new.stage := case
+      when new.done then 'production'
+      when new.in_progress then 'doing'
+      when old.stage = 'production' or old.stage = 'doing' then 'backlog'
+      else old.stage
+    end;
+  end if;
+
+  if new.done and (tg_op = 'INSERT' or not old.done) then
+    new.done_at := coalesce(new.done_at, now());
+  elsif not new.done then
+    new.done_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_tasks_sync_stage on tasks;
+create trigger trg_tasks_sync_stage
+  before insert or update on tasks
+  for each row execute function trg_tasks_sync_stage();

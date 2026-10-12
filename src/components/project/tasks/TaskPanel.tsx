@@ -7,20 +7,19 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { openProjectFile, uploadProjectFile } from "@/lib/uploads";
 import { fileGlyph, fmtDateTime } from "@/lib/format";
-import type { FileRow, Task } from "@/lib/database.types";
+import type { FileRow, Task, TaskStage } from "@/lib/database.types";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import {
   CLIENT,
   NO_EDIT_MSG,
-  TASK_STATUSES,
   assignmentFields,
   assignmentValue,
   canEditTask,
   dueInfo,
-  statusPatch,
-  taskStatus,
+  columnOf,
+  stagePatch,
   updateTask,
-  type TaskStatus,
+  type FlowColumn,
 } from "./shared";
 
 // Panel lateral de una tarea (como abrir una página en Notion): propiedades,
@@ -29,6 +28,7 @@ export function TaskPanel({
   task: t,
   files,
   projectId,
+  flow,
   assigneeOptions,
   onUpdated,
   onDeleted,
@@ -37,6 +37,8 @@ export function TaskPanel({
   task: Task;
   files: FileRow[];
   projectId: string;
+  /** Columnas del flujo de este proyecto (desarrollo o sencillo). */
+  flow: FlowColumn[];
   assigneeOptions: (current?: string | null) => React.ReactNode;
   onUpdated: (row: Task) => void;
   onDeleted: (id: string) => void;
@@ -143,13 +145,13 @@ export function TaskPanel({
           <dt>Estado</dt>
           <dd>
             <select
-              className={`task-status-select is-${taskStatus(t)}`}
-              value={taskStatus(t)}
+              className={`task-status-select is-${columnOf(t, flow).value}`}
+              value={columnOf(t, flow).value}
               disabled={!canEdit}
-              onChange={(e) => patch(statusPatch(e.target.value as TaskStatus))}
+              onChange={(e) => patch(stagePatch(e.target.value as TaskStage))}
             >
-              {TASK_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
+              {flow.map((s) => (
+                <option key={s.value} value={s.value} title={s.hint}>
                   {s.label}
                 </option>
               ))}

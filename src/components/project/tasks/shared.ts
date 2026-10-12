@@ -1,28 +1,69 @@
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import type { Task } from "@/lib/database.types";
+import type { Project, Task, TaskStage } from "@/lib/database.types";
 
 // Valor especial del desplegable de asignación: la tarea está en manos del cliente
 export const CLIENT = "__client";
 
-export type TaskStatus = "todo" | "doing" | "done";
+/**
+ * Columna del flujo de tareas. `value` es la fase que se guarda al dejar una
+ * tarea en esa columna; `stages`, las fases que se muestran en ella.
+ */
+export type FlowColumn = { value: TaskStage; label: string; stages: TaskStage[]; hint?: string };
 
-export const TASK_STATUSES: { value: TaskStatus; label: string }[] = [
-  { value: "todo", label: "Por hacer" },
-  { value: "doing", label: "En curso" },
-  { value: "done", label: "Hecha" },
+// Proyectos en desarrollo, testing, post go-live y laboratorio
+export const DEV_FLOW: FlowColumn[] = [
+  { value: "backlog", label: "Backlog", stages: ["backlog"], hint: "Todo lo pendiente" },
+  { value: "next", label: "Next", stages: ["next"], hint: "Lo que toca ahora (unas 5)" },
+  { value: "doing", label: "En curso", stages: ["doing"] },
+  { value: "testing", label: "Testing", stages: ["testing"], hint: "Hecha: falta probar y validar" },
+  { value: "deploy", label: "Pendiente de deploy", stages: ["deploy"], hint: "Validada y fusionada, aún no en producción" },
+  { value: "production", label: "En producción", stages: ["production"] },
 ];
 
-export function taskStatus(t: Task): TaskStatus {
-  return t.done ? "done" : t.in_progress ? "doing" : "todo";
+// Proyectos de preventa: tareas sencillas
+export const SIMPLE_FLOW: FlowColumn[] = [
+  { value: "backlog", label: "Por hacer", stages: ["backlog", "next"] },
+  { value: "doing", label: "En curso", stages: ["doing", "testing", "deploy"] },
+  { value: "production", label: "Hecha", stages: ["production"] },
+];
+
+/** Tareas en "Next" a partir de las cuales se avisa. */
+export const NEXT_LIMIT = 5;
+
+/** Flujo de desarrollo para proyectos en ejecución y de laboratorio; el sencillo para preventa. */
+export function usesDevFlow(p: Project) {
+  return p.kind === "laboratorio" || ["desarrollo", "testing", "mantenimiento"].includes(p.status);
 }
 
-/** Columnas de la tabla tasks para pasar a un estado. */
-export function statusPatch(s: TaskStatus): Partial<Task> {
+export function flowFor(p: Project) {
+  return usesDevFlow(p) ? DEV_FLOW : SIMPLE_FLOW;
+}
+
+/** Fase de una tarea (por si alguna llega sin stage: se deduce de done / in_progress). */
+export function stageOf(t: Task): TaskStage {
+  return t.stage || (t.done ? "production" : t.in_progress ? "doing" : "backlog");
+}
+
+/** Columna del flujo en la que se ve una tarea. */
+export function columnOf(t: Task, flow: FlowColumn[]) {
+  const s = stageOf(t);
+  return flow.find((c) => c.stages.includes(s)) || flow[0];
+}
+
+/** Siguiente columna (lo que hace la casilla). En la última, vuelve a la primera. */
+export function nextColumn(t: Task, flow: FlowColumn[]) {
+  const i = flow.indexOf(columnOf(t, flow));
+  return flow[(i + 1) % flow.length];
+}
+
+/** Cambios para pasar a una fase (la base de datos recalcula done / in_progress igual). */
+export function stagePatch(stage: TaskStage): Partial<Task> {
   return {
-    done: s === "done",
-    done_at: s === "done" ? new Date().toISOString() : null,
-    in_progress: s === "doing",
+    stage,
+    done: stage === "production",
+    done_at: stage === "production" ? new Date().toISOString() : null,
+    in_progress: stage === "doing",
   };
 }
 

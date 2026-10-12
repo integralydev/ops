@@ -6,14 +6,13 @@ import { useAppData } from "@/components/app-data";
 import { useFiles, useTasks } from "@/lib/hooks/useProjectDetail";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import type { FileRow, Project, Task } from "@/lib/database.types";
+import type { FileRow, Project, Task, TaskStage } from "@/lib/database.types";
 import { kindOf } from "@/lib/format";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskPanel } from "@/components/project/tasks/TaskPanel";
 import {
   CLIENT,
   NO_EDIT_MSG,
-  TASK_STATUSES,
   assignmentFields,
   assignmentValue,
   between,
@@ -22,10 +21,15 @@ import {
   dueInfo,
   moveTask,
   posOf,
-  statusPatch,
-  taskStatus,
+  NEXT_LIMIT,
+  columnOf,
+  flowFor,
+  nextColumn,
+  stageOf,
+  stagePatch,
   updateTask,
-  type TaskStatus,
+  usesDevFlow,
+  type FlowColumn,
 } from "@/components/project/tasks/shared";
 
 type Filter = "all" | "mine" | "client" | "none" | "overdue" | string; // string = id de una persona
@@ -73,6 +77,10 @@ export function TasksTab({ project }: { project: Project }) {
   const clientLabel = client ? client.name : "Cliente";
   // Laboratorio: producto propio, no hay cliente al que asignar tareas
   const hasClient = kindOf(project) !== "laboratorio";
+  // Desarrollo/laboratorio: Backlog → Next → En curso → Testing → Deploy → Producción.
+  // Preventa: Por hacer / En curso / Hecha.
+  const flow = flowFor(project);
+  const devFlow = usesDevFlow(project);
 
   // Encargado, developers del proyecto y siempre admins/directores
   const staffIds = Object.values(team)
@@ -124,12 +132,13 @@ export function TasksTab({ project }: { project: Project }) {
   ];
 
   const visible = all.filter((t) => matches(t, filter));
+  const nextCount = all.filter((t) => stageOf(t) === "next").length;
   const pending = visible.filter((t) => !t.done);
   const done = visible.filter((t) => t.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
 
   // --- acciones ---------------------------------------------------------------
 
-  async function addTask(title: string, status: TaskStatus = "todo", position?: number) {
+  async function addTask(title: string, stage: TaskStage = "backlog", position?: number) {
     // En la vista "Mías", de una persona o del cliente, la nueva tarea va para ellos
     const assignee = filter === "mine" ? me.id : filter === "client" ? CLIENT : people.includes(filter) ? filter : "";
     const top = all.length ? Math.min(...all.map(posOf)) - 1 : 0;
@@ -141,7 +150,7 @@ export function TasksTab({ project }: { project: Project }) {
         created_by: me.id,
         position: position ?? top,
         ...assignmentFields(assignee),
-        ...statusPatch(status),
+        ...stagePatch(stage),
       })
       .select()
       .single();
@@ -180,22 +189,22 @@ export function TasksTab({ project }: { project: Project }) {
   }
 
   // Soltar una tarea arrastrada delante/detrás de otra (o al final de una lista)
-  async function dropAt(list: Task[], targetIndex: number, status?: TaskStatus) {
+  async function dropAt(list: Task[], targetIndex: number, stage?: TaskStage) {
     const t = dragId ? tasks[dragId] : null;
     setDragId(null);
     if (!t) return;
     const rest = list.filter((x) => x.id !== t.id);
     const idx = Math.max(0, Math.min(targetIndex - (list.slice(0, targetIndex).some((x) => x.id === t.id) ? 1 : 0), rest.length));
     const pos = between(rest[idx - 1], rest[idx]);
-    const changesStatus = status && status !== taskStatus(t);
+    const changesStatus = stage && !flow.find((c) => c.value === stage)?.stages.includes(stageOf(t));
     if (changesStatus && !canEditTask(t, me.id, isStaff)) {
       toast(NO_EDIT_MSG);
       return;
     }
-    upsertLocal({ ...t, position: pos, ...(changesStatus ? statusPatch(status) : {}) });
+    upsertLocal({ ...t, position: pos, ...(changesStatus ? stagePatch(stage) : {}) });
     const ok = await moveTask(t.id, pos);
     if (changesStatus) {
-      const row = await updateTask(t.id, statusPatch(status));
+      const row = await updateTask(t.id, stagePatch(stage));
       upsertLocal(row ? { ...row, position: pos } : t);
     } else if (!ok) upsertLocal(t);
   }
@@ -207,7 +216,11 @@ export function TasksTab({ project }: { project: Project }) {
     canEdit: canEditTask(t, me.id, isStaff),
     canDelete: isStaff || t.created_by === me.id,
     assigneeOptions,
-    onToggle: () => patch(t, statusPatch(t.done ? "todo" : "done")),
+    // Casilla: en desarrollo pasa a la fase siguiente; en preventa completa (o reabre)
+    onToggle: () =>
+      patch(t, stagePatch(devFlow ? nextColumn(t, flow).value : t.done ? "backlog" : "production")),
+    flow,
+    devFlow,
     onTitle: (title: string) => patch(t, { title }),
     onDue: (due: string | null) => patch(t, { due_date: due }),
     onAssign: (v: string) => assign(t, v),
@@ -230,7 +243,13 @@ export function TasksTab({ project }: { project: Project }) {
         </div>
         {all.length > 0 && (
           <span className="muted" style={{ fontSize: 12.3 }}>
-            {all.filter((t) => !t.done).length} pendientes · {all.filter((t) => t.done).length} hechas
+            {all.filter((t) => !t.done).length} pendientes · {all.filter((t) => t.done).length} {devFlow ? "en producción" : "hechas"}
+            {devFlow && nextCount > 0 && (
+              <span className={"task-next-count" + (nextCount > NEXT_LIMIT ? " is-over" : "")} title={`Recomendado: ${NEXT_LIMIT} como máximo`}>
+                {" "}· Next: {nextCount}
+                {nextCount > NEXT_LIMIT ? ` (máx. ${NEXT_LIMIT})` : ""}
+              </span>
+            )}
           </span>
         )}
       </div>
@@ -276,7 +295,7 @@ export function TasksTab({ project }: { project: Project }) {
           {done.length > 0 && (
             <>
               <button className="tasks-done-toggle" onClick={() => setShowDone((v) => !v)}>
-                <span className={"tasks-caret" + (showDone ? " open" : "")}>▸</span> Completadas ({done.length})
+                <span className={"tasks-caret" + (showDone ? " open" : "")}>▸</span> {devFlow ? "En producción" : "Completadas"} ({done.length})
               </button>
               {showDone && (
                 <div className="tasks-list">
@@ -289,9 +308,9 @@ export function TasksTab({ project }: { project: Project }) {
           )}
         </>
       ) : (
-        <div className="task-board">
-          {TASK_STATUSES.map((s) => {
-            const col = visible.filter((t) => taskStatus(t) === s.value);
+        <div className="task-board" style={{ gridTemplateColumns: `repeat(${flow.length}, minmax(${devFlow ? 160 : 220}px, 1fr))` }}>
+          {flow.map((s) => {
+            const col = visible.filter((t) => columnOf(t, flow).value === s.value);
             return (
               <div
                 key={s.value}
@@ -305,7 +324,10 @@ export function TasksTab({ project }: { project: Project }) {
                 <div className="task-col-head">
                   <span className={`task-status-dot is-${s.value}`} />
                   {s.label}
-                  <span className="muted">{col.length}</span>
+                  <span className={s.value === "next" && devFlow && col.length > NEXT_LIMIT ? "task-next-count is-over" : "muted"}>
+                    {col.length}
+                    {s.value === "next" && devFlow && col.length > NEXT_LIMIT ? ` / ${NEXT_LIMIT}` : ""}
+                  </span>
                 </div>
                 {col.map((t, i) => (
                   <DropSlot key={t.id} active={!!dragId && dragId !== t.id} onDrop={(after) => dropAt(col, after ? i + 1 : i, s.value)}>
@@ -333,6 +355,7 @@ export function TasksTab({ project }: { project: Project }) {
           task={openTask}
           files={filesByTask[openTask.id] || []}
           projectId={project.id}
+          flow={flow}
           assigneeOptions={assigneeOptions}
           onUpdated={upsertLocal}
           onDeleted={removeLocal}
@@ -442,6 +465,8 @@ type RowProps = {
   dragging?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
+  flow: FlowColumn[];
+  devFlow: boolean;
 };
 
 function TaskRow(p: RowProps) {
@@ -449,7 +474,10 @@ function TaskRow(p: RowProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(t.title);
   const due = dueInfo(t.due_date, t.done);
-  const status = taskStatus(t);
+  const col = columnOf(t, p.flow);
+  const next = nextColumn(t, p.flow);
+  // Etiqueta de fase: en desarrollo, todas menos Backlog y Producción; en preventa, "En curso"
+  const showStage = p.devFlow ? !["backlog", "production"].includes(col.value) : col.value === "doing";
 
   function save() {
     setEditing(false);
@@ -473,7 +501,9 @@ function TaskRow(p: RowProps) {
         className={"task-circle" + (t.done ? " done" : "")}
         onClick={p.onToggle}
         disabled={!p.canEdit}
-        title={p.canEdit ? (t.done ? "Marcar como pendiente" : "Completar") : NO_EDIT_MSG}
+        title={
+          !p.canEdit ? NO_EDIT_MSG : p.devFlow ? `Pasar a: ${next.label}` : t.done ? "Marcar como pendiente" : "Completar"
+        }
       >
         {t.done ? "✓" : ""}
       </button>
@@ -506,7 +536,7 @@ function TaskRow(p: RowProps) {
             {t.title}
           </span>
         )}
-        {status === "doing" && <span className="task-pill is-doing">En curso</span>}
+        {showStage && <span className={`task-pill is-${col.value}`}>{col.label}</span>}
         {t.description && (
           <button className="task-meta-btn" onClick={p.onOpen} title="Tiene descripción">
             ≡

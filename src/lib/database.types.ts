@@ -83,6 +83,9 @@ export interface Project {
   created_by: string | null;
 }
 
+/** Flujo de una tarea: backlog → next → doing → testing → deploy → production (= hecha). */
+export type TaskStage = "backlog" | "next" | "doing" | "testing" | "deploy" | "production";
+
 export interface Task {
   id: string;
   project_id: string;
@@ -91,7 +94,8 @@ export interface Task {
   assigned_to_client: boolean;
   done: boolean;
   done_at: string | null;
-  /** Columna "En curso" del tablero ("Hecha" es done). */
+  /** Fase de la tarea. done e in_progress se derivan de ella (trigger). */
+  stage: TaskStage;
   in_progress: boolean;
   due_date: string | null;
   description: string;
