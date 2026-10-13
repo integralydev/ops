@@ -5,16 +5,32 @@ import { useRouter } from "next/navigation";
 import { useAppData } from "@/components/app-data";
 import { useFeaturedLinks, useProjects } from "@/lib/hooks/useProjects";
 import { ProjectCard } from "@/components/ProjectCard";
-import { ProjectTable } from "@/components/ProjectTable";
+import { ProjectTable, type ProjectGroup } from "@/components/ProjectTable";
+import { ProjectBoard } from "@/components/projects/ProjectBoard";
 import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
-import { LAB_STATUSES, PROJECT_STATUSES, kindOf } from "@/lib/format";
-import type { ProjectKind } from "@/lib/database.types";
+import { statusesFor } from "@/components/projects/cells";
+import { kindOf } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
+import type { Project, ProjectKind, ProjectStatus } from "@/lib/database.types";
 
-type View = "table" | "cards" | "timeline";
+type View = "table" | "board" | "gallery" | "timeline";
+type Sort = "phase" | "name" | "updated" | "pending";
 
-// Vista preferida (tabla/tarjetas), recordada en este navegador.
+const VIEWS: { value: View; label: string; icon: string }[] = [
+  { value: "table", label: "Tabla", icon: "▤" },
+  { value: "board", label: "Tablero", icon: "▥" },
+  { value: "gallery", label: "Galería", icon: "▦" },
+  { value: "timeline", label: "Línea temporal", icon: "⟶" },
+];
+const SORTS: { value: Sort; label: string }[] = [
+  { value: "phase", label: "Por fase" },
+  { value: "name", label: "Nombre (A-Z)" },
+  { value: "updated", label: "Actualizados recientemente" },
+  { value: "pending", label: "Más tareas pendientes" },
+];
+
+// Vista preferida, recordada en este navegador.
 const VIEW_KEY = "projectsView";
 function subscribeView(cb: () => void) {
   window.addEventListener("projects-view", cb);
@@ -23,7 +39,8 @@ function subscribeView(cb: () => void) {
 function readView(): View {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    return v === "cards" || v === "timeline" ? v : "table";
+    if (v === "cards") return "gallery"; // nombre antiguo
+    return v === "board" || v === "gallery" || v === "timeline" ? v : "table";
   } catch {
     return "table";
   }
@@ -45,11 +62,13 @@ function readKind(): ProjectKind {
   }
 }
 
+// Proyectos como una base de datos de Notion: vistas (tabla, tablero,
+// galería, línea temporal), buscador, filtro por encargado y orden.
 export default function ProjectsPage() {
-  const { isStaff } = useAppData();
-  const { projects, loading } = useProjects();
+  const { me, isStaff, clients, team, nameFor } = useAppData();
+  const { projects, loading, upsertLocal } = useProjects();
   const featured = useFeaturedLinks();
-  const [showNew, setShowNew] = useState(false);
+  const [newStatus, setNewStatus] = useState<ProjectStatus | "default" | null>(null);
   const [pendingTasks, setPendingTasks] = useState<Record<string, { team: number; client: number }>>({});
   const [lastUpdates, setLastUpdates] = useState<
     Record<string, { author_id: string | null; text: string; created_at: string }>
@@ -58,20 +77,22 @@ export default function ProjectsPage() {
   const urlKind = useSyncExternalStore(noSubscribe, readKind, () => "cliente" as ProjectKind);
   const [kindChoice, setKindChoice] = useState<ProjectKind | null>(null);
   const kind = kindChoice ?? urlKind;
+  const [q, setQ] = useState("");
+  const [owner, setOwner] = useState("all");
+  const [sort, setSort] = useState<Sort>("phase");
   const router = useRouter();
+
   const everything = Object.values(projects);
-  // Cliente y laboratorio nunca se mezclan: se ve uno u otro
-  const all = everything.filter((p) => kindOf(p) === kind);
   const countOf = (k: ProjectKind) => everything.filter((p) => kindOf(p) === k).length;
   // La línea temporal es del proceso con clientes
-  const view = kind === "laboratorio" && storedView === "timeline" ? "table" : storedView;
+  const view: View = kind === "laboratorio" && storedView === "timeline" ? "table" : storedView;
 
   function changeKind(k: ProjectKind) {
     setKindChoice(k);
     router.replace(k === "laboratorio" ? "/projects?tipo=laboratorio" : "/projects", { scroll: false });
   }
 
-  // Nº de tareas pendientes por proyecto (se recalcula si cambian los proyectos)
+  // Nº de tareas pendientes y última actualización de cada proyecto
   const projectCount = everything.length;
   useEffect(() => {
     const supabase = createClient();
@@ -88,7 +109,6 @@ export default function ProjectsPage() {
         });
         setPendingTasks(counts);
       });
-    // Última actualización de cada proyecto (la más reciente de la tabla notes)
     supabase
       .from("notes")
       .select("project_id, author_id, text, created_at")
@@ -103,27 +123,52 @@ export default function ProjectsPage() {
       });
   }, [projectCount]);
 
-  const groups = useMemo(() => {
-    const statuses = kind === "laboratorio" ? LAB_STATUSES : PROJECT_STATUSES;
-    // Las fases del proceso llevan número para que se vea el orden; pausado,
-    // cerrado y aparcado no son fases, van sin número al final.
-    const offFlow = ["pausado", "cerrado", "aparcado"];
-    let n = 0;
-    const known = statuses.map(({ value, label }) => ({
-      key: value as string,
-      label: offFlow.includes(value) ? label : `${++n}. ${label}`,
-      projects: all.filter((p) => p.status === value),
+  // Cliente y laboratorio nunca se mezclan; después, buscador y filtro
+  const needle = q.trim().toLowerCase();
+  const all = everything
+    .filter((p) => kindOf(p) === kind)
+    .filter((p) => owner === "all" || (owner === "none" ? !p.owner_id : p.owner_id === owner))
+    .filter((p) => {
+      if (!needle) return true;
+      const client = p.client_id ? clients[p.client_id]?.name || "" : "";
+      return `${p.name} ${client} ${p.next_step || ""}`.toLowerCase().includes(needle);
+    });
+
+  const displayName = (p: Project) => (p.client_id && clients[p.client_id] ? clients[p.client_id].name : p.name);
+  const lastActivity = (p: Project) => lastUpdates[p.id]?.created_at || p.updated_at || p.created_at;
+  const pendingOf = (p: Project) => (pendingTasks[p.id]?.team || 0) + (pendingTasks[p.id]?.client || 0);
+  const sorter = (a: Project, b: Project) => {
+    if (sort === "updated") return lastActivity(b).localeCompare(lastActivity(a));
+    if (sort === "pending") return pendingOf(b) - pendingOf(a) || displayName(a).localeCompare(displayName(b), "es");
+    return displayName(a).localeCompare(displayName(b), "es");
+  };
+
+  // Columnas por fase (todas, para el tablero) y grupos con proyectos (tabla y galería)
+  const columns: ProjectGroup[] = useMemo(() => {
+    const statuses = statusesFor({ kind });
+    const cols = statuses.map((s) => ({
+      key: s.value as string,
+      label: s.label,
+      projects: all.filter((p) => p.status === s.value).sort(sorter),
     }));
     // Red de seguridad: proyectos con un estado que no está en la lista
-    // (p. ej. el antiguo "activo") no deben desaparecer de la vista.
-    known.push({
-      key: "__otros",
-      label: "Sin estado asignado",
-      projects: all.filter((p) => !statuses.some((s) => s.value === p.status)),
-    });
-    return known.filter((g) => g.projects.length > 0);
+    const orphans = all.filter((p) => !statuses.some((s) => s.value === p.status));
+    if (orphans.length) cols.push({ key: "__otros", label: "Sin estado asignado", projects: orphans.sort(sorter) });
+    return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects, kind]);
+  }, [projects, kind, q, owner, sort, pendingTasks, lastUpdates, clients]);
+  const groups =
+    sort === "phase"
+      ? columns.filter((g) => g.projects.length > 0)
+      : all.length
+        ? [{ key: "__todos", label: SORTS.find((s) => s.value === sort)!.label, projects: [...all].sort(sorter) }]
+        : [];
+
+  const owners = Object.values(team)
+    .filter((t) => t.role !== "comercial")
+    .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
+  const filtered = !!needle || owner !== "all";
+  const onNew = isStaff ? (s: ProjectStatus) => setNewStatus(s) : undefined;
 
   return (
     <>
@@ -132,28 +177,13 @@ export default function ProjectsPage() {
           <h1>Proyectos</h1>
           <div className="topbar-sub">Todos los proyectos que puedes ver</div>
         </div>
-        <div className="row" style={{ gap: 10 }}>
-          <div className="seg" role="group" aria-label="Vista">
-            <button className={view === "table" ? "active" : ""} onClick={() => saveView("table")}>
-              Tabla
-            </button>
-            <button className={view === "cards" ? "active" : ""} onClick={() => saveView("cards")}>
-              Tarjetas
-            </button>
-            {kind === "cliente" && (
-              <button className={view === "timeline" ? "active" : ""} onClick={() => saveView("timeline")}>
-                Línea temporal
-              </button>
-            )}
-          </div>
-          {isStaff && (
-            <button className="btn btn-primary" onClick={() => setShowNew(true)}>
-              + Nuevo proyecto
-            </button>
-          )}
-        </div>
+        {isStaff && (
+          <button className="btn btn-primary" onClick={() => setNewStatus("default")}>
+            + Nuevo proyecto
+          </button>
+        )}
       </div>
-      <div className="content">
+      <div className="content wide">
         <div className="tabs kind-tabs">
           <button className={"tab" + (kind === "cliente" ? " active" : "")} onClick={() => changeKind("cliente")}>
             🏢 Clientes <span className="kind-count">{countOf("cliente")}</span>
@@ -162,9 +192,61 @@ export default function ProjectsPage() {
             🧪 Laboratorio <span className="kind-count">{countOf("laboratorio")}</span>
           </button>
         </div>
+
+        <div className="ndb-bar">
+          <div className="ndb-views" role="tablist" aria-label="Vista">
+            {VIEWS.filter((v) => v.value !== "timeline" || kind === "cliente").map((v) => (
+              <button
+                key={v.value}
+                role="tab"
+                aria-selected={view === v.value}
+                className={"ndb-view" + (view === v.value ? " active" : "")}
+                onClick={() => saveView(v.value)}
+              >
+                <span aria-hidden>{v.icon}</span> {v.label}
+              </button>
+            ))}
+          </div>
+          <div className="ndb-tools">
+            <input type="search" className="ndb-search" placeholder="🔍 Buscar" value={q} onChange={(e) => setQ(e.target.value)} />
+            <select className={"ndb-tool" + (owner !== "all" ? " is-on" : "")} value={owner} onChange={(e) => setOwner(e.target.value)} title="Filtrar por encargado">
+              <option value="all">Encargado: todos</option>
+              <option value={me.id}>Encargado: yo</option>
+              {owners
+                .filter((t) => t.id !== me.id)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    Encargado: {nameFor(t.id)}
+                  </option>
+                ))}
+              <option value="none">Sin encargado</option>
+            </select>
+            {view !== "board" && view !== "timeline" && (
+              <select className={"ndb-tool" + (sort !== "phase" ? " is-on" : "")} value={sort} onChange={(e) => setSort(e.target.value as Sort)} title="Ordenar">
+                {SORTS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    ⇅ {s.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {filtered && (
+              <button
+                className="section-link"
+                onClick={() => {
+                  setQ("");
+                  setOwner("all");
+                }}
+              >
+                Quitar filtros
+              </button>
+            )}
+          </div>
+        </div>
+
         {loading ? (
           <div className="empty">Cargando…</div>
-        ) : all.length === 0 ? (
+        ) : everything.filter((p) => kindOf(p) === kind).length === 0 ? (
           <div className="empty">
             {kind === "laboratorio"
               ? isStaff
@@ -174,15 +256,30 @@ export default function ProjectsPage() {
                 ? 'Todavía no hay proyectos. Crea el primero con "+ Nuevo proyecto".'
                 : "No tienes proyectos asignados todavía."}
           </div>
+        ) : all.length === 0 ? (
+          <div className="empty">Ningún proyecto coincide con la búsqueda o el filtro.</div>
         ) : view === "timeline" ? (
           <ProjectTimeline projects={all} />
+        ) : view === "board" ? (
+          <ProjectBoard columns={columns} pendingTasks={pendingTasks} onUpdated={upsertLocal} onNew={onNew} />
         ) : view === "table" ? (
-          <ProjectTable groups={groups} pendingTasks={pendingTasks} lastUpdates={lastUpdates} featured={featured} />
+          <ProjectTable
+            groups={groups}
+            pendingTasks={pendingTasks}
+            lastUpdates={lastUpdates}
+            featured={featured}
+            onUpdated={upsertLocal}
+            onNew={sort === "phase" ? onNew : undefined}
+          />
         ) : (
           groups.map((g) => (
             <div key={g.key} className="section-block">
-              <div className="section-title">
-                {g.label} ({g.projects.length})
+              <div className="ndb-gallery-head">
+                <span className={`badge badge-${g.key}`}>
+                  <span className="badge-dot" />
+                  {g.label}
+                </span>
+                <span className="ndb-group-count">{g.projects.length}</span>
               </div>
               <div className="grid grid-cards">
                 {g.projects.map((p) => (
@@ -194,10 +291,11 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {showNew && (
+      {newStatus && (
         <ProjectFormModal
           initialKind={kind}
-          onClose={() => setShowNew(false)}
+          initialStatus={newStatus === "default" ? undefined : newStatus}
+          onClose={() => setNewStatus(null)}
           onSaved={(id) => router.push(`/projects/${id}`)}
         />
       )}

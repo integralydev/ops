@@ -12,6 +12,7 @@ import { LAB_STATUSES, PROJECT_KINDS, PROJECT_STATUSES, STATUS_GROUP_LABELS, fir
 export function ProjectFormModal({
   project,
   initialKind,
+  initialStatus,
   initialClientId,
   initialName,
   onClose,
@@ -20,6 +21,8 @@ export function ProjectFormModal({
   project?: Project;
   /** Para un proyecto nuevo: tipo con el que empieza (por defecto, cliente). */
   initialKind?: ProjectKind;
+  /** Para un proyecto nuevo: fase con la que empieza (p. ej. "+ Nuevo" de un grupo). */
+  initialStatus?: ProjectStatus;
   /** Para un proyecto nuevo: cliente ya elegido (p. ej. al cerrar una empresa en Comercial). */
   initialClientId?: string;
   initialName?: string;
@@ -42,7 +45,9 @@ export function ProjectFormModal({
 
   const [name, setName] = useState(project?.name || initialName || "");
   const [kind, setKind] = useState<ProjectKind>(project ? kindOf(project) : initialKind || "cliente");
-  const [status, setStatus] = useState<ProjectStatus>(project?.status || firstStatusOf(initialKind || "cliente"));
+  const [status, setStatus] = useState<ProjectStatus>(
+    project?.status || initialStatus || firstStatusOf(initialKind || "cliente"),
+  );
   const [clientId, setClientId] = useState(project?.client_id || initialClientId || "");
   const [ownerId, setOwnerId] = useState(
     project ? project.owner_id || "" : defaultOwnerFor("descubrimiento") || "",

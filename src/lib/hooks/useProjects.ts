@@ -63,7 +63,10 @@ export function useProjects() {
     };
   }, [supabase, uid]);
 
-  return { projects, loading };
+  // Para reflejar al momento un cambio propio sin esperar a Realtime.
+  const upsertLocal = (row: Project) => setProjects((prev) => ({ ...prev, [row.id]: row }));
+
+  return { projects, loading, upsertLocal };
 }
 
 // Enlace destacado de cada proyecto visible (botón rápido en tarjetas y tabla).
