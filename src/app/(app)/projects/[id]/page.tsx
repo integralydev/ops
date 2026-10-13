@@ -11,16 +11,20 @@ import { NotesTab } from "@/components/project/NotesTab";
 import { ScopeTab } from "@/components/project/ScopeTab";
 import { LinksTab } from "@/components/project/LinksTab";
 import { AccessTab } from "@/components/project/AccessTab";
+import { ContentTab } from "@/components/project/ContentTab";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { kindOf } from "@/lib/format";
 
-// Un proyecto de laboratorio no tiene alcance pactado ni accesos de terceros
+// Un proyecto de laboratorio no tiene alcance pactado ni accesos de terceros;
+// "Contenido" (ideas para publicar) es solo de laboratorio
 const LAB_HIDDEN_TABS: string[] = ["scope", "accesos"];
+const LAB_ONLY_TABS: string[] = ["contenido"];
 
 const TABS = [
   ["resumen", "Resumen"],
   ["scope", "Scope"],
   ["tareas", "Tareas"],
+  ["contenido", "Contenido"], // solo laboratorio
   ["archivos", "Archivos"],
   ["enlaces", "Enlaces"],
   ["accesos", "Accesos externos"], // solo admin y director
@@ -93,7 +97,12 @@ export default function ProjectDetailPage() {
       </div>
       <div className="content wide">
         <div className="tabs">
-          {TABS.filter(([key]) => (key !== "accesos" || isStaff) && !(isLab && LAB_HIDDEN_TABS.includes(key))).map(([key, label]) => (
+          {TABS.filter(
+            ([key]) =>
+              (key !== "accesos" || isStaff) &&
+              !(isLab && LAB_HIDDEN_TABS.includes(key)) &&
+              !(!isLab && LAB_ONLY_TABS.includes(key)),
+          ).map(([key, label]) => (
             <button
               key={key}
               className={"tab" + (tab === key ? " active" : "")}
@@ -103,8 +112,10 @@ export default function ProjectDetailPage() {
             </button>
           ))}
         </div>
-        {isLab && LAB_HIDDEN_TABS.includes(tab) ? (
+        {(isLab && LAB_HIDDEN_TABS.includes(tab)) || (!isLab && LAB_ONLY_TABS.includes(tab)) ? (
           <ResumenTab project={project} />
+        ) : tab === "contenido" ? (
+          <ContentTab project={project} />
         ) : tab === "scope" ? (
           <ScopeTab project={project} />
         ) : tab === "tareas" ? (

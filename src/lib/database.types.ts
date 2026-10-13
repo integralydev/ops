@@ -269,3 +269,13 @@ export interface ProjectAccess {
   created_by: string | null;
   created_at: string;
 }
+
+// Idea de contenido de un proyecto de laboratorio. Sin estados: al
+// publicarla, se borra.
+export interface ContentIdea {
+  id: string;
+  project_id: string;
+  text: string;
+  created_by: string | null;
+  created_at: string;
+}
