@@ -182,6 +182,27 @@ export function TaskPanel({
           }}
         />
 
+        {/* Las imágenes van arriba y en grande: es lo primero que se ve al abrir la tarea */}
+        <TaskImages images={images} canDelete={canDeleteFile} onViewerChange={setViewerOpen} />
+        <div className="task-img-add">
+          <label className="task-file" style={{ cursor: "pointer" }}>
+            {attaching ? "Subiendo…" : "🖼 Añadir imagen"}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              disabled={attaching}
+              onChange={(e) => {
+                const picked = Array.from(e.target.files || []);
+                e.target.value = "";
+                attach(picked);
+              }}
+            />
+          </label>
+          <span className="muted">o pega una captura con ⌘V / Ctrl+V, o arrástrala aquí</span>
+        </div>
+
         <dl className="task-props">
           <dt>Estado</dt>
           <dd>
@@ -252,29 +273,6 @@ export function TaskPanel({
           onChange={(e) => setDescription(e.target.value)}
           onBlur={saveDescription}
         />
-
-        <div className="task-panel-section">
-          Imágenes {images.length > 0 && <span className="muted">({images.length})</span>}
-        </div>
-        <TaskImages images={images} canDelete={canDeleteFile} onViewerChange={setViewerOpen} />
-        <div className="task-img-add">
-          <label className="task-file" style={{ cursor: "pointer" }}>
-            {attaching ? "Subiendo…" : "🖼 Añadir imagen"}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              style={{ display: "none" }}
-              disabled={attaching}
-              onChange={(e) => {
-                const picked = Array.from(e.target.files || []);
-                e.target.value = "";
-                attach(picked);
-              }}
-            />
-          </label>
-          <span className="muted">o pega una captura con ⌘V / Ctrl+V, o arrástrala aquí</span>
-        </div>
 
         <div className="task-panel-section">
           Otros adjuntos {others.length > 0 && <span className="muted">({others.length})</span>}

@@ -312,7 +312,17 @@ a.dash-stat:hover{border-color:var(--ink-faint);}
 .task-img-del{position:absolute; top:5px; right:5px; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border:none; border-radius:6px; background:rgba(15,16,22,.6); color:#fff; font-size:10px; cursor:pointer; opacity:0;}
 .task-img:hover .task-img-del{opacity:1;}
 @media (hover:none){ .task-img-del{opacity:1;} }
-.task-img-add{display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px;}
+.task-img-add{display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; margin:6px 0 4px;}
+.task-hero{position:relative; margin:10px 0 0;}
+.task-hero-btn{display:flex; align-items:center; justify-content:center; width:100%; padding:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface-2); cursor:zoom-in; min-height:160px;}
+.task-hero-btn:hover{border-color:var(--accent);}
+.task-hero-btn img{display:block; max-width:100%; max-height:min(52vh,460px); object-fit:contain;}
+.task-hero .task-img-loading{min-height:200px;}
+.task-hero:hover .task-img-del{opacity:1;}
+.task-strip{display:flex; gap:6px; margin-top:8px; overflow-x:auto; padding-bottom:2px;}
+.task-strip-item{flex:0 0 auto; width:56px; height:56px; padding:0; border:2px solid transparent; border-radius:8px; overflow:hidden; background:var(--surface-2); cursor:pointer;}
+.task-strip-item.active{border-color:var(--accent);}
+.task-strip-item img{width:100%; height:100%; object-fit:cover; object-position:top; display:block;}
 .task-panel.is-dropping{box-shadow:inset 0 0 0 3px var(--accent), -12px 0 40px rgba(20,20,35,.12);}
 .task-drop-hint{position:sticky; top:0; z-index:3; margin:-4px 0 10px; padding:10px; border-radius:8px; background:var(--accent); color:var(--accent-ink); font-size:13px; font-weight:600; text-align:center;}
 .img-viewer{position:fixed; inset:0; z-index:80; background:rgba(10,10,14,.88); display:flex; align-items:center; justify-content:center; padding:24px 24px 72px; cursor:zoom-out;}

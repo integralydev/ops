@@ -8,9 +8,9 @@ import type { FileRow } from "@/lib/database.types";
 
 export const isImage = (f: Pick<FileRow, "content_type">) => !!f.content_type?.startsWith("image/");
 
-// Miniaturas de las capturas de una tarea (en el panel lateral). El bucket es
-// privado: se piden URLs firmadas. Clic → se ve en grande, con flechas para
-// pasar de una a otra.
+// Capturas de una tarea, arriba del panel lateral: la imagen en grande y, si
+// hay varias, miniaturas para cambiar. El bucket es privado: se piden URLs
+// firmadas. Clic → visor a pantalla completa, con flechas para pasar.
 export function TaskImages({
   images,
   canDelete,
@@ -23,6 +23,7 @@ export function TaskImages({
 }) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [viewing, setViewing] = useState<number | null>(null);
+  const [sel, setSel] = useState(0);
   const key = images.map((f) => f.storage_path).join("|");
 
   useEffect(() => {
@@ -83,13 +84,36 @@ export function TaskImages({
 
   if (!images.length) return null;
   const current = viewing !== null ? images[viewing] : null;
+  const shown = images[Math.min(sel, images.length - 1)];
+  const shownIndex = images.indexOf(shown);
 
   return (
     <>
-      <div className="task-imgs">
-        {images.map((f, i) => (
-          <div key={f.id} className="task-img">
-            <button className="task-img-btn" onClick={() => open(i)} title={f.filename}>
+      {/* Imagen grande (sin recortar); si hay varias, miniaturas debajo para cambiar */}
+      <div className="task-hero">
+        <button className="task-hero-btn" onClick={() => open(shownIndex)} title="Ver en grande">
+          {urls[shown.storage_path] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={urls[shown.storage_path]} alt={shown.filename} />
+          ) : (
+            <span className="task-img-loading" />
+          )}
+        </button>
+        {canDelete(shown) && (
+          <button className="task-img-del" title="Borrar esta imagen" onClick={() => remove(shown)}>
+            ✕
+          </button>
+        )}
+      </div>
+      {images.length > 1 && (
+        <div className="task-strip">
+          {images.map((f, i) => (
+            <button
+              key={f.id}
+              className={"task-strip-item" + (i === shownIndex ? " active" : "")}
+              onClick={() => setSel(i)}
+              title={f.filename}
+            >
               {urls[f.storage_path] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={urls[f.storage_path]} alt={f.filename} />
@@ -97,14 +121,9 @@ export function TaskImages({
                 <span className="task-img-loading" />
               )}
             </button>
-            {canDelete(f) && (
-              <button className="task-img-del" title="Borrar imagen" onClick={() => remove(f)}>
-                ✕
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {current && (
         <div className="img-viewer" onClick={() => open(null)}>
