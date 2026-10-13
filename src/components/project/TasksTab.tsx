@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
 import { useFiles, useTasks } from "@/lib/hooks/useProjectDetail";
@@ -371,14 +371,44 @@ function QuickAdd({ onAdd, compact = false }: { onAdd: (title: string) => Promis
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(!compact);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  // El cuadro crece hacia abajo con el texto (como una tarjeta), sin barra de desplazamiento
+  function fit() {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
+  // Si cambia el ancho (columna o ventana), se reajusta la altura
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let w = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === w) return;
+      w = el.clientWidth;
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open]);
 
   async function submit() {
-    const title = value.trim();
+    const title = value.replace(/\s+/g, " ").trim();
     if (!title || busy) return;
     setBusy(true);
     const ok = await onAdd(title);
     setBusy(false);
-    if (ok) setValue("");
+    if (ok) {
+      setValue("");
+      requestAnimationFrame(() => {
+        fit();
+        ref.current?.focus(); // listo para la siguiente
+      });
+    }
   }
 
   if (!open) {
@@ -389,23 +419,30 @@ function QuickAdd({ onAdd, compact = false }: { onAdd: (title: string) => Promis
     );
   }
   return (
-    <div className={"task-quick" + (compact ? " compact" : "")}>
+    <div className={"task-quick" + (compact ? " compact" : "") + (busy ? " is-busy" : "")}>
       <span className="task-quick-plus">+</span>
-      <input
-        type="text"
+      <textarea
+        ref={ref}
+        rows={1}
         value={value}
         autoFocus={compact}
         placeholder={compact ? "Título y Enter…" : "Añadir tarea… (escribe y pulsa Enter)"}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          fit();
+        }}
         onKeyDown={(e) => {
-          if (e.key === "Enter") submit();
+          if (e.key === "Enter") {
+            e.preventDefault(); // el título es una línea: Enter guarda
+            submit();
+          }
           if (e.key === "Escape") {
             setValue("");
             if (compact) setOpen(false);
           }
         }}
         onBlur={() => compact && !value.trim() && setOpen(false)}
-        disabled={busy}
+        readOnly={busy}
       />
     </div>
   );
