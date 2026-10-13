@@ -9,6 +9,7 @@ import { openProjectFile, uploadProjectFile } from "@/lib/uploads";
 import { fileGlyph, fmtDateTime } from "@/lib/format";
 import type { FileRow, Task, TaskStage } from "@/lib/database.types";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
+import { TaskImages, isImage } from "./TaskImages";
 import {
   CLIENT,
   NO_EDIT_MSG,
@@ -50,14 +51,32 @@ export function TaskPanel({
   const [title, setTitle] = useState(t.title);
   const [description, setDescription] = useState(t.description || "");
   const [attaching, setAttaching] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [dropping, setDropping] = useState(false);
   const due = dueInfo(t.due_date, t.done);
+  const images = files.filter(isImage);
+  const others = files.filter((f) => !isImage(f));
+  const canDeleteFile = (f: FileRow) => isStaff || f.uploaded_by === me.id;
 
-  // Esc cierra el panel
+  // Esc cierra el panel (si el visor de imágenes está abierto, cierra solo el visor)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !viewerOpen && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, viewerOpen]);
+
+  // Pegar una captura (⌘V / Ctrl+V) con la tarea abierta la adjunta como imagen
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const pasted = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith("image/"));
+      if (!pasted.length) return; // texto normal: se pega como siempre
+      e.preventDefault();
+      attach(pasted.map(asCapture));
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t.id]);
 
   async function patch(p: Partial<Task>) {
     const row = await updateTask(t.id, p);
@@ -89,11 +108,14 @@ export function TaskPanel({
   async function attach(picked: File[]) {
     if (!picked.length) return;
     setAttaching(true);
+    let ok = 0;
     for (const file of picked) {
       const err = await uploadProjectFile(projectId, file, me.id, t.id);
       if (err) toast(err);
+      else ok++;
     }
     setAttaching(false);
+    if (ok) toast(ok === 1 ? "Adjuntado a la tarea" : `${ok} archivos adjuntados`);
   }
 
   async function remove() {
@@ -109,7 +131,26 @@ export function TaskPanel({
 
   return (
     <div className="task-panel-back" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <aside className="task-panel" role="dialog" aria-label="Tarea">
+      <aside
+        className={"task-panel" + (dropping ? " is-dropping" : "")}
+        role="dialog"
+        aria-label="Tarea"
+        onDragOver={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          setDropping(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer.files.length) return;
+          e.preventDefault();
+          setDropping(false);
+          attach(Array.from(e.dataTransfer.files));
+        }}
+      >
+        {dropping && <div className="task-drop-hint">Suelta aquí para adjuntarlo a la tarea</div>}
         <div className="task-panel-head">
           <span className="muted" style={{ fontSize: 12 }}>
             Tarea
@@ -213,10 +254,33 @@ export function TaskPanel({
         />
 
         <div className="task-panel-section">
-          Adjuntos {files.length > 0 && <span className="muted">({files.length})</span>}
+          Imágenes {images.length > 0 && <span className="muted">({images.length})</span>}
+        </div>
+        <TaskImages images={images} canDelete={canDeleteFile} onViewerChange={setViewerOpen} />
+        <div className="task-img-add">
+          <label className="task-file" style={{ cursor: "pointer" }}>
+            {attaching ? "Subiendo…" : "🖼 Añadir imagen"}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              disabled={attaching}
+              onChange={(e) => {
+                const picked = Array.from(e.target.files || []);
+                e.target.value = "";
+                attach(picked);
+              }}
+            />
+          </label>
+          <span className="muted">o pega una captura con ⌘V / Ctrl+V, o arrástrala aquí</span>
+        </div>
+
+        <div className="task-panel-section">
+          Otros adjuntos {others.length > 0 && <span className="muted">({others.length})</span>}
         </div>
         <div className="task-files" style={{ marginTop: 0 }}>
-          {files.map((f) => (
+          {others.map((f) => (
             <button
               key={f.id}
               className="task-file"
@@ -248,4 +312,14 @@ export function TaskPanel({
       </aside>
     </div>
   );
+}
+
+// Las capturas pegadas llegan como "image.png": se les pone un nombre con fecha
+function asCapture(f: File) {
+  if (f.name && f.name !== "image.png") return f;
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const ext = f.type.split("/")[1] || "png";
+  const name = `captura-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
+  return new File([f], name, { type: f.type });
 }

@@ -302,6 +302,26 @@ a.dash-stat:hover{border-color:var(--ink-faint);}
 .task-panel-desc:hover{background:var(--surface-2);}
 .task-panel-desc:focus{outline:none; background:var(--surface); border-color:var(--border);}
 
+/* ---------- Imágenes de una tarea (panel lateral) ---------- */
+.task-imgs{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin-bottom:10px;}
+.task-img{position:relative;}
+.task-img-btn{display:block; width:100%; aspect-ratio:4/3; padding:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--surface-2); cursor:zoom-in;}
+.task-img-btn:hover{border-color:var(--accent);}
+.task-img-btn img{width:100%; height:100%; object-fit:cover; object-position:top; display:block;}
+.task-img-loading{display:block; width:100%; height:100%; background:var(--surface-2);}
+.task-img-del{position:absolute; top:5px; right:5px; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border:none; border-radius:6px; background:rgba(15,16,22,.6); color:#fff; font-size:10px; cursor:pointer; opacity:0;}
+.task-img:hover .task-img-del{opacity:1;}
+@media (hover:none){ .task-img-del{opacity:1;} }
+.task-img-add{display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px;}
+.task-panel.is-dropping{box-shadow:inset 0 0 0 3px var(--accent), -12px 0 40px rgba(20,20,35,.12);}
+.task-drop-hint{position:sticky; top:0; z-index:3; margin:-4px 0 10px; padding:10px; border-radius:8px; background:var(--accent); color:var(--accent-ink); font-size:13px; font-weight:600; text-align:center;}
+.img-viewer{position:fixed; inset:0; z-index:80; background:rgba(10,10,14,.88); display:flex; align-items:center; justify-content:center; padding:24px 24px 72px; cursor:zoom-out;}
+.img-viewer img{max-width:100%; max-height:100%; object-fit:contain; border-radius:6px; box-shadow:0 20px 60px rgba(0,0,0,.5); cursor:default;}
+.img-viewer-bar{position:absolute; left:50%; bottom:18px; transform:translateX(-50%); display:flex; align-items:center; gap:6px; padding:6px 8px 6px 14px; border-radius:99px; background:rgba(30,30,38,.92); color:#EDEDF2; font-size:12.6px; max-width:calc(100% - 32px); cursor:default;}
+.img-viewer-bar span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:6px;}
+.img-viewer-bar button, .img-viewer-bar a{border:none; background:rgba(255,255,255,.1); color:#EDEDF2; border-radius:99px; padding:5px 11px; font-size:12.6px; font-family:inherit; cursor:pointer; white-space:nowrap;}
+.img-viewer-bar button:hover, .img-viewer-bar a:hover{background:rgba(255,255,255,.2);}
+
 /* ---------- Ideas de contenido (laboratorio) ---------- */
 .idea-compose{display:flex; gap:10px; align-items:flex-start; margin-bottom:14px;}
 .idea-compose textarea{flex:1; padding:9px 11px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); font-size:13.6px; font-family:inherit; resize:vertical; min-height:46px;}

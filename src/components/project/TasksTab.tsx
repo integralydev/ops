@@ -10,6 +10,7 @@ import type { FileRow, Project, Task, TaskStage } from "@/lib/database.types";
 import { kindOf } from "@/lib/format";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskPanel } from "@/components/project/tasks/TaskPanel";
+import { isImage } from "@/components/project/tasks/TaskImages";
 import {
   CLIENT,
   NO_EDIT_MSG,
@@ -579,11 +580,7 @@ function TaskRow(p: RowProps) {
             ≡
           </button>
         )}
-        {p.files.length > 0 && (
-          <button className="task-meta-btn" onClick={p.onOpen} title="Adjuntos">
-            📎 {p.files.length}
-          </button>
-        )}
+        <FileBadges files={p.files} onOpen={p.onOpen} />
       </div>
 
       <DueChip due={due} value={t.due_date} canEdit={p.canEdit} onChange={p.onDue} />
@@ -618,7 +615,7 @@ function TaskCard(p: RowProps) {
       <div className="task-card-title">{t.title}</div>
       <div className="task-card-meta">
         {due && <span className={`task-due is-${due.tone || "plain"}`}>📅 {due.label}</span>}
-        {p.files.length > 0 && <span className="muted">📎 {p.files.length}</span>}
+        <FileBadges files={p.files} />
         {t.description && <span className="muted">≡</span>}
         <span style={{ flex: 1 }} />
         {t.assigned_to_client ? (
@@ -628,6 +625,27 @@ function TaskCard(p: RowProps) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+// Desde fuera solo se ve que hay imágenes / adjuntos; se ven al abrir la tarea.
+function FileBadges({ files, onOpen }: { files: FileRow[]; onOpen?: () => void }) {
+  const imgs = files.filter(isImage).length;
+  const others = files.length - imgs;
+  const Tag = onOpen ? "button" : "span";
+  return (
+    <>
+      {imgs > 0 && (
+        <Tag className="task-meta-btn" onClick={onOpen} title={`${imgs} imagen${imgs === 1 ? "" : "es"}: ábrela para verlas`}>
+          🖼 {imgs}
+        </Tag>
+      )}
+      {others > 0 && (
+        <Tag className="task-meta-btn" onClick={onOpen} title="Adjuntos">
+          📎 {others}
+        </Tag>
+      )}
+    </>
   );
 }
 
