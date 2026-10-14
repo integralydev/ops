@@ -3,15 +3,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
-import { useFiles, useTasks } from "@/lib/hooks/useProjectDetail";
+import { useFiles, useTaskComments, useTasks } from "@/lib/hooks/useProjectDetail";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import type { FileRow, Project, Task, TaskStage } from "@/lib/database.types";
+import type { FileRow, Project, Task, TaskComment, TaskStage } from "@/lib/database.types";
 import { kindOf } from "@/lib/format";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskPanel } from "@/components/project/tasks/TaskPanel";
 import { isImage } from "@/components/project/tasks/TaskImages";
 import { isAudio } from "@/components/project/tasks/TaskAudio";
+import { CommentBadge, unreadOf, useCommentReads } from "@/components/project/tasks/TaskComments";
 import {
   CLIENT,
   NO_EDIT_MSG,
@@ -54,13 +55,26 @@ export function TasksTab({ project }: { project: Project }) {
   const { me, isStaff, nameFor, clients, team } = useAppData();
   const { rows: tasks, loading, upsertLocal, removeLocal } = useTasks(project.id);
   const { rows: files } = useFiles(project.id);
+  const { rows: comments, upsertLocal: upsertComment, removeLocal: removeComment } = useTaskComments(project.id);
+  const { reads, markRead } = useCommentReads(me.id);
+  // Última lectura de la tarea abierta *antes* de abrirla: sus comentarios
+  // posteriores de otros se marcan como nuevos en el panel
+  const [openedLastRead, setOpenedLastRead] = useState<string | undefined>(undefined);
   // Vista recordada en este navegador (en el servidor, siempre lista)
   const storedView = useSyncExternalStore(noSubscribe, readView, () => "list" as View);
   const [viewChoice, setViewState] = useState<View | null>(null);
   const view = viewChoice ?? storedView;
   const [filter, setFilter] = useState<Filter>("all");
   const [showDone, setShowDone] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenIdState] = useState<string | null>(null);
+
+  function setOpenId(id: string | null) {
+    setOpenIdState(id);
+    if (id) {
+      setOpenedLastRead(reads[id]);
+      markRead(id);
+    }
+  }
   const [dragId, setDragId] = useState<string | null>(null);
 
   function setView(v: View) {
@@ -211,7 +225,18 @@ export function TasksTab({ project }: { project: Project }) {
     } else if (!ok) upsertLocal(t);
   }
 
+  const commentsByTask: Record<string, TaskComment[]> = {};
+  Object.values(comments).forEach((c) => (commentsByTask[c.task_id] ||= []).push(c));
+  // Si llega un comentario nuevo con la tarea abierta, ya está leído
+  const openCount = openId ? (commentsByTask[openId] || []).length : 0;
+  useEffect(() => {
+    if (openId && openCount) markRead(openId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCount]);
+
   const rowProps = (t: Task) => ({
+    comments: commentsByTask[t.id] || [],
+    unread: unreadOf(commentsByTask[t.id] || [], me.id, reads[t.id]),
     task: t,
     files: filesByTask[t.id] || [],
     clientLabel,
@@ -362,6 +387,10 @@ export function TasksTab({ project }: { project: Project }) {
           onUpdated={upsertLocal}
           onDeleted={removeLocal}
           onClose={() => setOpenId(null)}
+          comments={commentsByTask[openTask.id] || []}
+          lastRead={openedLastRead}
+          onCommentChanged={upsertComment}
+          onCommentRemoved={removeComment}
         />
       )}
     </div>
@@ -506,6 +535,8 @@ type RowProps = {
   onDragEnd?: () => void;
   flow: FlowColumn[];
   devFlow: boolean;
+  comments: TaskComment[];
+  unread: TaskComment[];
 };
 
 function TaskRow(p: RowProps) {
@@ -582,6 +613,7 @@ function TaskRow(p: RowProps) {
           </button>
         )}
         <FileBadges files={p.files} onOpen={p.onOpen} />
+        <CommentBadge comments={p.comments} unread={p.unread} onOpen={p.onOpen} />
       </div>
 
       <DueChip due={due} value={t.due_date} canEdit={p.canEdit} onChange={p.onDue} />
@@ -617,6 +649,7 @@ function TaskCard(p: RowProps) {
       <div className="task-card-meta">
         {due && <span className={`task-due is-${due.tone || "plain"}`}>📅 {due.label}</span>}
         <FileBadges files={p.files} />
+        <CommentBadge comments={p.comments} unread={p.unread} />
         {t.description && <span className="muted">≡</span>}
         <span style={{ flex: 1 }} />
         {t.assigned_to_client ? (

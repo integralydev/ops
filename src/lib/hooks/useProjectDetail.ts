@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { ContentIdea, FileRow, Note, Project, ProjectAccess, ProjectLink, ScopeItem, Task } from "@/lib/database.types";
+import type { ContentIdea, TaskComment, FileRow, Note, Project, ProjectAccess, ProjectLink, ScopeItem, Task } from "@/lib/database.types";
 
 export function useProject(id: string) {
   const [project, setProject] = useState<Project | null | undefined>(undefined); // undefined = loading
@@ -46,7 +46,15 @@ export function useProject(id: string) {
   return project;
 }
 
-function useSubcollection<T extends { id: string }>(table: "tasks" | "files" | "notes" | "scope_items" | "project_links" | "project_accesses" | "content_ideas",
+function useSubcollection<T extends { id: string }>(table:
+    | "tasks"
+    | "files"
+    | "notes"
+    | "scope_items"
+    | "project_links"
+    | "project_accesses"
+    | "content_ideas"
+    | "task_comments",
   projectId: string, orderCol = "created_at") {
   const [rows, setRows] = useState<Record<string, T>>({});
   const [loading, setLoading] = useState(true);
@@ -132,6 +140,10 @@ export function useScope(projectId: string) {
 }
 export function useLinks(projectId: string) {
   return useSubcollection<ProjectLink>("project_links", projectId);
+}
+/** Comentarios de todas las tareas del proyecto. */
+export function useTaskComments(projectId: string) {
+  return useSubcollection<TaskComment>("task_comments", projectId);
 }
 /** Ideas de contenido (proyectos de laboratorio). */
 export function useContentIdeas(projectId: string) {

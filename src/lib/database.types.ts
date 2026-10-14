@@ -155,7 +155,8 @@ export type ActivityKind =
   | "task_created"
   | "task_done"
   | "file_uploaded"
-  | "update_posted";
+  | "update_posted"
+  | "task_comment";
 
 // Registro de actividad: lo rellenan triggers de la base de datos
 export interface Activity {
@@ -278,4 +279,15 @@ export interface ContentIdea {
   text: string;
   created_by: string | null;
   created_at: string;
+}
+
+// Comentario en una tarea
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  project_id: string;
+  author_id: string | null;
+  text: string;
+  created_at: string;
+  edited_at: string | null;
 }

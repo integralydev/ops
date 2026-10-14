@@ -23,11 +23,13 @@ const ICONS: Record<Activity["kind"], string> = {
   task_done: "✅",
   file_uploaded: "📎",
   update_posted: "💬",
+  task_comment: "💬",
 };
 
 // Pestaña del proyecto a la que lleva cada tipo de actividad
 const TAB: Partial<Record<Activity["kind"], string>> = {
   link_added: "enlaces",
+  task_comment: "tareas",
   demo_link: "enlaces",
   task_created: "tareas",
   task_done: "tareas",
@@ -148,6 +150,12 @@ export function RecentActivity({
         );
       case "update_posted":
         return "ha publicado una actualización";
+      case "task_comment":
+        return (
+          <>
+            ha comentado en la tarea <b>«{str("title")}»</b>
+          </>
+        );
       default:
         return "ha hecho un cambio";
     }
@@ -162,7 +170,8 @@ export function RecentActivity({
         const project = projects[a.project_id];
         const client = project?.client_id ? clients[project.client_id] : null;
         const tab = TAB[a.kind];
-        const quote = !compact && a.kind === "update_posted" ? (a.data?.text as string) || "" : "";
+        const quote =
+          !compact && (a.kind === "update_posted" || a.kind === "task_comment") ? (a.data?.text as string) || "" : "";
         const imgs = !compact && a.kind === "update_posted" ? Number(a.data?.images || 0) : 0;
         return (
           <Link

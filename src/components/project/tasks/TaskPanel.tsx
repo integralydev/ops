@@ -7,10 +7,11 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { openProjectFile, uploadProjectFile } from "@/lib/uploads";
 import { fileGlyph, fmtDateTime } from "@/lib/format";
-import type { FileRow, Task, TaskStage } from "@/lib/database.types";
+import type { FileRow, Task, TaskComment, TaskStage } from "@/lib/database.types";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskImages, isImage } from "./TaskImages";
 import { AudioRecorder, TaskAudios, isAudio } from "./TaskAudio";
+import { TaskCommentsSection } from "./TaskComments";
 import {
   CLIENT,
   NO_EDIT_MSG,
@@ -35,6 +36,10 @@ export function TaskPanel({
   onUpdated,
   onDeleted,
   onClose,
+  comments,
+  lastRead,
+  onCommentChanged,
+  onCommentRemoved,
 }: {
   task: Task;
   files: FileRow[];
@@ -45,6 +50,10 @@ export function TaskPanel({
   onUpdated: (row: Task) => void;
   onDeleted: (id: string) => void;
   onClose: () => void;
+  comments: TaskComment[];
+  lastRead?: string;
+  onCommentChanged: (row: TaskComment) => void;
+  onCommentRemoved: (id: string) => void;
 }) {
   const { me, isStaff, nameFor } = useAppData();
   const canEdit = canEditTask(t, me.id, isStaff);
@@ -311,6 +320,15 @@ export function TaskPanel({
         </div>
 
         {!canEdit && <p className="muted" style={{ fontSize: 12, marginTop: 18 }}>{NO_EDIT_MSG}.</p>}
+
+        <TaskCommentsSection
+          taskId={t.id}
+          projectId={projectId}
+          comments={comments}
+          lastRead={lastRead}
+          onChanged={onCommentChanged}
+          onRemoved={onCommentRemoved}
+        />
       </aside>
     </div>
   );
