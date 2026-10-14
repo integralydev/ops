@@ -10,6 +10,7 @@ import { fileGlyph, fmtDateTime } from "@/lib/format";
 import type { FileRow, Task, TaskStage } from "@/lib/database.types";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskImages, isImage } from "./TaskImages";
+import { AudioRecorder, TaskAudios, isAudio } from "./TaskAudio";
 import {
   CLIENT,
   NO_EDIT_MSG,
@@ -55,7 +56,8 @@ export function TaskPanel({
   const [dropping, setDropping] = useState(false);
   const due = dueInfo(t.due_date, t.done);
   const images = files.filter(isImage);
-  const others = files.filter((f) => !isImage(f));
+  const audios = files.filter(isAudio);
+  const others = files.filter((f) => !isImage(f) && !isAudio(f));
   const canDeleteFile = (f: FileRow) => isStaff || f.uploaded_by === me.id;
 
   // Esc cierra el panel (si el visor de imágenes está abierto, cierra solo el visor)
@@ -200,8 +202,10 @@ export function TaskPanel({
               }}
             />
           </label>
+          <AudioRecorder disabled={attaching} onRecorded={(file) => attach([file])} />
           <span className="muted">o pega una captura con ⌘V / Ctrl+V, o arrástrala aquí</span>
         </div>
+        <TaskAudios audios={audios} nameFor={nameFor} canDelete={canDeleteFile} />
 
         <dl className="task-props">
           <dt>Estado</dt>

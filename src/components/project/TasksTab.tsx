@@ -11,6 +11,7 @@ import { kindOf } from "@/lib/format";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskPanel } from "@/components/project/tasks/TaskPanel";
 import { isImage } from "@/components/project/tasks/TaskImages";
+import { isAudio } from "@/components/project/tasks/TaskAudio";
 import {
   CLIENT,
   NO_EDIT_MSG,
@@ -631,13 +632,19 @@ function TaskCard(p: RowProps) {
 // Desde fuera solo se ve que hay imágenes / adjuntos; se ven al abrir la tarea.
 function FileBadges({ files, onOpen }: { files: FileRow[]; onOpen?: () => void }) {
   const imgs = files.filter(isImage).length;
-  const others = files.length - imgs;
+  const audios = files.filter(isAudio).length;
+  const others = files.length - imgs - audios;
   const Tag = onOpen ? "button" : "span";
   return (
     <>
       {imgs > 0 && (
         <Tag className="task-meta-btn" onClick={onOpen} title={`${imgs} imagen${imgs === 1 ? "" : "es"}: ábrela para verlas`}>
           🖼 {imgs}
+        </Tag>
+      )}
+      {audios > 0 && (
+        <Tag className="task-meta-btn" onClick={onOpen} title={`${audios} audio${audios === 1 ? "" : "s"}: ábrela para escucharlos`}>
+          🎙 {audios}
         </Tag>
       )}
       {others > 0 && (
