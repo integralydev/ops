@@ -783,3 +783,95 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
   .topbar{padding:14px 16px 14px 60px;}
 }
 .mobile-menu-btn{display:none; border:1px solid var(--border); background:var(--surface); border-radius:8px; width:34px; height:34px; align-items:center; justify-content:center; cursor:pointer; font-size:16px;}
+
+/* ===========================================================================
+   Móvil y pantallas táctiles
+   =========================================================================== */
+.two-col-main{grid-template-columns:2fr 1fr; align-items:start;}
+.two-col-side{grid-template-columns:1fr 1.4fr; align-items:start;}
+.sidebar-backdrop{display:none;}
+
+/* Sin ratón no hay "pasar por encima": lo que solo salía al pasar, se ve siempre */
+@media (hover:none){
+  .ndb-open{display:none;}
+  .tc-actions, .idea-remove, .task-img-del, .audio-del{opacity:1;}
+}
+
+@media (max-width:1000px){
+  .two-col-main, .two-col-side{grid-template-columns:1fr;}
+}
+
+@media (max-width:820px){
+  /* iOS hace zoom al tocar un campo con letra de menos de 16px */
+  input, select, textarea{font-size:16px !important;}
+
+  /* Menú lateral: se cierra tocando fuera */
+  .sidebar-backdrop{display:block; position:fixed; inset:0; z-index:39; background:rgba(15,16,22,.35);}
+  .mobile-menu-btn{width:38px; height:38px; top:max(12px, env(safe-area-inset-top)) !important;}
+
+  /* Cabecera: título más pequeño y botones debajo si no caben */
+  .topbar{flex-wrap:wrap; gap:10px; padding-top:max(14px, env(safe-area-inset-top)); position:static;}
+  .topbar h1{font-size:19px; line-height:1.25; word-break:break-word;}
+  .topbar > .row{flex-wrap:wrap;}
+
+  /* Pestañas: se desplazan de lado en vez de salirse */
+  .tabs{overflow-x:auto; flex-wrap:nowrap; scrollbar-width:none; -webkit-overflow-scrolling:touch; margin-left:-16px; margin-right:-16px; padding:0 16px;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{white-space:nowrap; margin-right:14px; flex:0 0 auto;}
+
+  /* Ventanas: casi a pantalla completa */
+  .modal-back{padding:12px 10px; align-items:flex-start;}
+  .modal-body{max-height:calc(100dvh - 150px); padding:16px;}
+  .modal-head, .modal-foot{padding:14px 16px;}
+
+  /* Tareas: título arriba y los datos (fecha, persona…) debajo */
+  .task-line{flex-wrap:wrap; row-gap:4px; padding:8px 6px; align-items:flex-start;}
+  .task-grip{display:none;}
+  .task-circle{margin-top:2px;}
+  .task-main{flex:1 1 calc(100% - 40px);}
+  .task-line > .task-due-chip, .task-line > .task-assignee, .task-line > .task-open, .task-line > .icon-btn{margin-left:0;}
+  .task-line > .task-due-chip{margin-left:28px;}
+  .task-line > .task-due-chip.is-empty{display:none;}
+  .task-line > .icon-btn{display:none;} /* borrar: desde dentro de la tarea */
+  .task-line > .task-due-chip.is-empty + .task-assignee{margin-left:28px;}
+  .task-panel{padding:14px 16px 32px; padding-bottom:max(32px, env(safe-area-inset-bottom));}
+  .task-panel-title{font-size:19px;}
+  .task-props{grid-template-columns:96px 1fr;}
+  .tasks-toolbar{gap:8px;}
+
+  /* Visor de imágenes */
+  .img-viewer{padding:12px 12px 84px;}
+  .img-viewer-bar{flex-wrap:wrap; justify-content:center; border-radius:16px; bottom:max(14px, env(safe-area-inset-bottom));}
+  .img-viewer-bar span{display:none;}
+
+  /* Base de datos de proyectos: en la tabla, lo esencial */
+  .ndb-table .col-next, .ndb-table .col-date, .ndb-table .col-num{display:none;}
+  .ndb-col-name{min-width:170px;}
+  .ndb-bar{align-items:stretch;}
+  .ndb-tools{width:100%;}
+  .ndb-search{flex:1; width:auto;}
+  .ndb-search:focus{width:auto;}
+
+  /* Filas con muchos controles: pasan a dos líneas */
+  .team-row{flex-wrap:wrap;}
+  .team-row .role-pill{display:none;} /* el desplegable ya dice el rol */
+  .team-row > div:nth-child(2){flex:1 1 calc(100% - 60px) !important;}
+  .file-row{flex-wrap:wrap;}
+  .file-row > div:nth-child(2){flex:1 1 calc(100% - 50px) !important;}
+  .note{flex-wrap:wrap;}
+
+  /* Comercial */
+  .com-filters .scope-select{flex:1 1 45%; max-width:none;}
+  .com-count{width:100%; margin-left:0;}
+  .com-detail{gap:14px;}
+  .com-col{gap:14px;}
+
+  /* Notas de contenido y avisos */
+  .idea-grid{grid-template-columns:1fr 1fr;}
+  .toast{bottom:max(18px, env(safe-area-inset-bottom)); max-width:calc(100% - 32px); text-align:center;}
+}
+
+@media (max-width:480px){
+  .idea-grid{grid-template-columns:1fr;}
+  .dash-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+}

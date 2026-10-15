@@ -67,7 +67,7 @@ export function ResumenTab({ project }: { project: Project }) {
   }
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", alignItems: "start" }}>
+    <div className="grid two-col-main">
       <div className="card pad">
         <div className="row between" style={{ marginBottom: 14 }}>
           <span className={`badge badge-${project.status}`}>

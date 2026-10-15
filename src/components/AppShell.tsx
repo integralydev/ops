@@ -131,6 +131,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </div>
+      {open && <div className="sidebar-backdrop" onClick={() => setOpen(false)} aria-hidden />}
       <div className="main">
         <button
           className="mobile-menu-btn"

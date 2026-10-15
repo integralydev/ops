@@ -457,7 +457,7 @@ function QuickAdd({ onAdd, compact = false }: { onAdd: (title: string) => Promis
         rows={1}
         value={value}
         autoFocus={compact}
-        placeholder={compact ? "Título y Enter…" : "Añadir tarea… (escribe y pulsa Enter)"}
+        placeholder={compact ? "Título y Enter…" : "Añadir tarea… (Enter para guardar)"}
         onChange={(e) => {
           setValue(e.target.value);
           fit();

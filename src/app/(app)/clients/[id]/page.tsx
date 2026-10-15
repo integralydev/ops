@@ -54,7 +54,7 @@ export default function ClientDetailPage() {
         <span className={`client-status client-status-${client.status || "lead"}`}>{clientStatusLabel(client.status)}</span>
       </div>
       <div className="content">
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1.4fr", alignItems: "start" }}>
+        <div className="grid two-col-side">
           <div className="card pad">
             <div className="row between" style={{ marginBottom: 10 }}>
               <h3 style={{ fontSize: 15 }}>Ficha</h3>
