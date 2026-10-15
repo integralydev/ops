@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { fmtDateTime, fmtRelative } from "@/lib/format";
 import type { TaskComment } from "@/lib/database.types";
+import { notifyTaskComment } from "@/app/(app)/projects/actions";
 
 // Hasta cuándo ha leído esta persona los comentarios de cada tarea (solo las
 // suyas, por RLS). Sirve para marcar desde fuera los comentarios nuevos.
@@ -115,6 +116,8 @@ export function TaskCommentsSection({
     }
     onChanged(data as TaskComment);
     setText("");
+    // Email a quien está en la tarea (en segundo plano; nunca bloquea)
+    notifyTaskComment(data.id);
   }
 
   async function saveEdit(c: TaskComment) {

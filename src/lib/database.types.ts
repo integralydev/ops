@@ -36,6 +36,10 @@ export interface Profile {
   full_name: string | null;
   /** Color del avatar (#RRGGBB); null = automático según el id. */
   color: string | null;
+  /** Email cuando te asignan una tarea. */
+  notify_task_assigned: boolean;
+  /** Email cuando comentan en una tarea tuya. */
+  notify_task_comments: boolean;
   created_at: string;
   added_by: string | null;
 }

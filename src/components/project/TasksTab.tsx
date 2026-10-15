@@ -67,12 +67,28 @@ export function TasksTab({ project }: { project: Project }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [showDone, setShowDone] = useState(false);
   const [openId, setOpenIdState] = useState<string | null>(null);
+  // Enlace directo a una tarea (?tarea=…, p. ej. desde el email de un comentario)
+  const [urlTask, setUrlTask] = useState<string | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("tarea");
+    } catch {
+      return null;
+    }
+  });
 
   function setOpenId(id: string | null) {
     setOpenIdState(id);
     if (id) {
       setOpenedLastRead(reads[id]);
       markRead(id);
+    } else if (urlTask) {
+      // Al cerrarla, se quita del enlace para que no se vuelva a abrir al recargar
+      setUrlTask(null);
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("tarea");
+        window.history.replaceState(null, "", u.toString());
+      } catch {}
     }
   }
   const [dragId, setDragId] = useState<string | null>(null);
@@ -228,11 +244,12 @@ export function TasksTab({ project }: { project: Project }) {
   const commentsByTask: Record<string, TaskComment[]> = {};
   Object.values(comments).forEach((c) => (commentsByTask[c.task_id] ||= []).push(c));
   // Si llega un comentario nuevo con la tarea abierta, ya está leído
-  const openCount = openId ? (commentsByTask[openId] || []).length : 0;
+  const activeId = openId ?? (urlTask && tasks[urlTask] ? urlTask : null);
+  const openCount = activeId ? (commentsByTask[activeId] || []).length : 0;
   useEffect(() => {
-    if (openId && openCount) markRead(openId);
+    if (activeId) markRead(activeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openCount]);
+  }, [activeId, openCount]);
 
   const rowProps = (t: Task) => ({
     comments: commentsByTask[t.id] || [],
@@ -255,7 +272,7 @@ export function TasksTab({ project }: { project: Project }) {
     onDelete: () => remove(t),
   });
 
-  const openTask = openId ? tasks[openId] : null;
+  const openTask = activeId ? tasks[activeId] : null;
 
   return (
     <div className="card pad">

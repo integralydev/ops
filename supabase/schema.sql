@@ -14,6 +14,9 @@ create table if not exists profiles (
   full_name text,
   -- color del avatar (#RRGGBB); vacío = automático
   color text constraint profiles_color_hex check (color is null or color ~ '^#[0-9A-Fa-f]{6}$'),
+  -- avisos por email (Ajustes)
+  notify_task_assigned boolean not null default true,
+  notify_task_comments boolean not null default true,
   created_at timestamptz not null default now(),
   added_by uuid references auth.users (id)
 );

@@ -108,9 +108,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             <span className="theme-light-only nav-label">Modo oscuro</span>
             <span className="theme-dark-only nav-label">Modo claro</span>
           </button>
-          <Link href="/set-password" className="nav-item" onClick={() => setOpen(false)} title="Contraseña">
-            <span className="nav-icon">🔑</span>
-            <span className="nav-label">Contraseña</span>
+          <Link href="/ajustes" className="nav-item" onClick={() => setOpen(false)} title="Ajustes: avisos y contraseña">
+            <span className="nav-icon">⚙️</span>
+            <span className="nav-label">Ajustes</span>
           </Link>
           <div className="me-row">
             <button className="avatar-btn" title="Cambiar tu color" onClick={() => setShowColor(true)}>
