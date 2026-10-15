@@ -156,6 +156,13 @@ export function prospectStatusLabel(s?: string | null) {
 export function prospectSourceLabel(s?: string | null) {
   return PROSPECT_SOURCES.find((x) => x.value === s)?.label ?? s ?? "";
 }
+/** Enlace de Google Maps a la dirección de una empresa (null si no hay datos). */
+export function mapsUrl(p: { address?: string | null; city?: string | null; province?: string | null }) {
+  const q = [p.address, p.city, p.province].map((x) => (x || "").trim()).filter(Boolean).join(", ");
+  if (!q || !(p.address || "").trim()) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
 export function prospectZoneLabel(s?: string | null) {
   return PROSPECT_ZONES.find((x) => x.value === s)?.label ?? "Sin zona";
 }

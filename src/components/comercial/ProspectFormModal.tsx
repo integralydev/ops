@@ -33,6 +33,7 @@ export function ProspectFormModal({
   const [zone, setZone] = useState<ProspectZone | "">(prospect?.zone || "");
   const [source, setSource] = useState<ProspectSource>(prospect?.source || "propio");
   const [status, setStatus] = useState<ProspectStatus>(prospect?.status || "sin_contactar");
+  const [address, setAddress] = useState(prospect?.address || "");
   const [city, setCity] = useState(prospect?.city || "");
   const [province, setProvince] = useState(prospect?.province || "");
   const [phone, setPhone] = useState(prospect?.phone || "");
@@ -52,6 +53,7 @@ export function ProspectFormModal({
       name: name.trim(),
       zone: zone || null,
       source,
+      address: address.trim(),
       city: city.trim(),
       province: province.trim(),
       phone: phone.trim(),
@@ -104,6 +106,10 @@ export function ProspectFormModal({
             ))}
           </select>
         </div>
+      </div>
+      <div className="field">
+        <label>Dirección</label>
+        <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle y número" />
       </div>
       <div className="field-row">
         <div className="field">

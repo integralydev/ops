@@ -204,6 +204,8 @@ export interface Prospect {
   id: string;
   name: string;
   zone: ProspectZone | null;
+  /** Calle y número (la población va en city). */
+  address: string;
   city: string;
   province: string;
   phone: string;

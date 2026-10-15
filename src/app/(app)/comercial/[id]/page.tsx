@@ -16,6 +16,7 @@ import {
   fmtDate,
   fmtDateTime,
   fmtRelative,
+  mapsUrl,
   prospectSourceLabel,
   prospectStatusLabel,
   prospectZoneLabel,
@@ -289,6 +290,15 @@ function ContactCard({ prospect: p }: { prospect: Prospect }) {
         <dd>{p.mobile ? <a href={tel(p.mobile)}>{p.mobile}</a> : "—"}</dd>
         <dt>Email</dt>
         <dd>{p.email ? <a href={`mailto:${p.email}`}>{p.email}</a> : "—"}</dd>
+        <dt>Dirección</dt>
+        <dd>
+          {p.address || "—"}
+          {mapsUrl(p) && (
+            <a className="com-map" href={mapsUrl(p)!} target="_blank" rel="noopener noreferrer">
+              📍 Ver en el mapa
+            </a>
+          )}
+        </dd>
         <dt>Población</dt>
         <dd>{[p.city, p.province].filter(Boolean).join(" · ") || "—"}</dd>
         <dt>Zona</dt>

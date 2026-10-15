@@ -452,6 +452,12 @@ span.task-comment-badge{cursor:default;}
 .com-next.is-overdue b{color:var(--danger);}
 .com-next.is-overdue b::after{content:" · vencida"; font-weight:600;}
 .com-stale{color:var(--danger); font-weight:600;}
+.com-addr{display:flex; align-items:center; gap:4px; max-width:340px;}
+.com-addr-text{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
+.com-map-pin{flex:0 0 auto; font-size:12px; padding:0 3px; border-radius:4px; text-decoration:none;}
+.com-map-pin:hover{background:var(--accent-soft);}
+.com-map{display:inline-block; margin-left:8px; padding:1px 8px; border-radius:99px; background:var(--accent-soft); color:var(--accent-dim) !important; font-size:12px; font-weight:600; white-space:nowrap; text-decoration:none !important;}
+.com-map:hover{background:var(--accent); color:var(--accent-ink) !important;}
 .com-back{display:inline-block; font-size:12.3px; font-weight:600; color:var(--ink-faint); margin-bottom:4px;}
 .com-back:hover{color:var(--accent);}
 .com-detail{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:20px; align-items:start;}

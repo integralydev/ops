@@ -567,6 +567,8 @@ create table if not exists prospects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   zone text check (zone in ('rodalies', 'alejados')),
+  -- calle y número (la población va en city)
+  address text not null default '',
   city text not null default '',
   province text not null default '',
   phone text not null default '',
@@ -609,6 +611,8 @@ create index if not exists prospect_events_prospect_idx on prospect_events (pros
 -- ---------------------------------------------------------------------------
 -- 4) Historial automático y "último movimiento"
 -- ---------------------------------------------------------------------------
+-- last_touched_at: solo lo comercial (estado, responsable, próxima acción; las notas lo
+-- actualizan aparte). Corregir datos de contacto no cuenta como movimiento.
 create or replace function trg_prospects_before_update()
 returns trigger
 language plpgsql
@@ -622,7 +626,13 @@ begin
     raise exception 'Solo admin puede enlazar la empresa con un cliente o proyecto';
   end if;
   new.updated_at := now();
-  new.last_touched_at := now();
+  -- Movimiento comercial: estado, responsable o próxima acción
+  if new.status is distinct from old.status
+     or new.owner_id is distinct from old.owner_id
+     or new.next_action is distinct from old.next_action
+     or new.next_action_date is distinct from old.next_action_date then
+    new.last_touched_at := now();
+  end if;
   return new;
 end;
 $$;

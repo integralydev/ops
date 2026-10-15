@@ -15,6 +15,7 @@ import {
   fmtDate,
   fmtDateTime,
   fmtRelative,
+  mapsUrl,
   prospectSourceLabel,
   prospectZoneLabel,
 } from "@/lib/format";
@@ -58,6 +59,7 @@ export default function ComercialPage() {
         !needle ||
         p.name.toLowerCase().includes(needle) ||
         p.city.toLowerCase().includes(needle) ||
+        (p.address || "").toLowerCase().includes(needle) ||
         (p.app_code || "").toLowerCase().includes(needle),
     )
     // Primero lo que sigue en juego; dentro, lo que tiene acción más próxima
@@ -126,7 +128,7 @@ export default function ComercialPage() {
           <input
             type="search"
             className="scope-search"
-            placeholder="Buscar por nombre, población o código…"
+            placeholder="Buscar por nombre, dirección, población o código…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -201,7 +203,23 @@ export default function ComercialPage() {
                     <tr key={p.id} className="ptable-row" onClick={() => router.push(`/comercial/${p.id}`)}>
                       <td>
                         <div className="ptable-name">{p.name}</div>
-                        <div className="ptable-sub">{[p.city, p.province].filter(Boolean).join(" · ") || "—"}</div>
+                        <div className="ptable-sub com-addr">
+                          <span className="com-addr-text" title={[p.address, p.city, p.province].filter(Boolean).join(", ")}>
+                            {[p.address, p.city].filter(Boolean).join(" · ") || p.province || "—"}
+                          </span>
+                          {mapsUrl(p) && (
+                            <a
+                              className="com-map-pin"
+                              href={mapsUrl(p)!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Ver en el mapa"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              📍
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <ProspectStatusSelect prospect={p} onUpdated={upsertLocal} />
