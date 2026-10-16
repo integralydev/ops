@@ -92,6 +92,8 @@ export function TasksTab({ project }: { project: Project }) {
     }
   }
   const [dragId, setDragId] = useState<string | null>(null);
+  // Columna del tablero con el cuadro de "nueva tarea" abierto arriba (el "+" de la cabecera)
+  const [topAddCol, setTopAddCol] = useState<string | null>(null);
 
   function setView(v: View) {
     setViewState(v);
@@ -325,7 +327,7 @@ export function TasksTab({ project }: { project: Project }) {
         <div className="empty">Cargando…</div>
       ) : view === "list" ? (
         <>
-          <QuickAdd onAdd={(title) => addTask(title)} />
+          <QuickAdd inputId="task-quick-main" onAdd={(title) => addTask(title)} />
           {pending.length === 0 && done.length === 0 && (
             <div className="tasks-empty">{all.length ? "No hay tareas con este filtro." : "No hay tareas todavía. Escribe arriba y pulsa Enter."}</div>
           )}
@@ -372,7 +374,20 @@ export function TasksTab({ project }: { project: Project }) {
                     {col.length}
                     {s.value === "next" && devFlow && col.length > NEXT_LIMIT ? ` / ${NEXT_LIMIT}` : ""}
                   </span>
+                  <button className="task-col-add" title={`Nueva tarea en ${s.label}`} onClick={() => setTopAddCol(s.value)}>
+                    +
+                  </button>
                 </div>
+                {topAddCol === s.value && (
+                  <QuickAdd
+                    key={`top-${s.value}`}
+                    compact
+                    startOpen
+                    onClose={() => setTopAddCol(null)}
+                    // Arriba del todo de la columna
+                    onAdd={(title) => addTask(title, s.value, col.length ? posOf(col[0]) - 1 : undefined)}
+                  />
+                )}
                 {col.map((t, i) => (
                   <DropSlot key={t.id} active={!!dragId && dragId !== t.id} onDrop={(after) => dropAt(col, after ? i + 1 : i, s.value)}>
                     <TaskCard
@@ -391,6 +406,28 @@ export function TasksTab({ project }: { project: Project }) {
             );
           })}
         </div>
+      )}
+
+      {/* "+" flotante: añadir sin tener que volver arriba de la lista o del tablero */}
+      {!loading && (
+        <button
+          className="task-fab"
+          title="Nueva tarea"
+          onClick={() => {
+            if (view === "list") {
+              const el = document.getElementById("task-quick-main");
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              el?.focus({ preventScroll: true });
+            } else {
+              setTopAddCol(flow[0].value);
+              requestAnimationFrame(() =>
+                document.querySelector(".task-board")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+              );
+            }
+          }}
+        >
+          +
+        </button>
       )}
 
       {openTask && (
@@ -415,10 +452,29 @@ export function TasksTab({ project }: { project: Project }) {
 }
 
 // "+ Añadir tarea": escribir y Enter; se queda listo para la siguiente.
-function QuickAdd({ onAdd, compact = false }: { onAdd: (title: string) => Promise<boolean>; compact?: boolean }) {
+function QuickAdd({
+  onAdd,
+  compact = false,
+  startOpen,
+  onClose,
+  inputId,
+}: {
+  onAdd: (title: string) => Promise<boolean>;
+  compact?: boolean;
+  /** Abierto desde el principio (p. ej. el "+" de la cabecera de una columna). */
+  startOpen?: boolean;
+  /** Se llama al cerrarlo (Esc o salir sin escribir). */
+  onClose?: () => void;
+  /** id del cuadro de texto (para llegar a él con el botón flotante). */
+  inputId?: string;
+}) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(!compact);
+  const [open, setOpenState] = useState(!compact || !!startOpen);
+  function setOpen(v: boolean) {
+    setOpenState(v);
+    if (!v) onClose?.();
+  }
   const ref = useRef<HTMLTextAreaElement>(null);
 
   // El cuadro crece hacia abajo con el texto (como una tarjeta), sin barra de desplazamiento
@@ -471,6 +527,7 @@ function QuickAdd({ onAdd, compact = false }: { onAdd: (title: string) => Promis
       <span className="task-quick-plus">+</span>
       <textarea
         ref={ref}
+        id={inputId}
         rows={1}
         value={value}
         autoFocus={compact}

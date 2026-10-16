@@ -256,6 +256,12 @@ a.dash-stat:hover{border-color:var(--ink-faint);}
 .task-board{display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:12px; overflow-x:auto; padding-bottom:6px;}
 .task-col{background:var(--surface-2); border-radius:10px; padding:10px; min-height:140px; min-width:0;}
 .task-col-head{display:flex; align-items:center; gap:7px; font-size:12.6px; font-weight:700; color:var(--ink); padding:2px 4px 10px;}
+.task-fab{position:fixed; right:max(22px, env(safe-area-inset-right)); bottom:max(22px, env(safe-area-inset-bottom)); z-index:30; width:52px; height:52px; border-radius:50%; border:none; background:var(--primary); color:var(--primary-ink); font-size:28px; font-weight:400; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 8px 24px rgba(20,20,35,.22); transition:transform .1s ease;}
+.task-fab:hover{transform:scale(1.06); background:var(--primary-hover);}
+.task-fab:active{transform:scale(.96);}
+.task-col-add{margin-left:auto; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border:none; border-radius:6px; background:none; color:var(--ink-faint); font-size:17px; line-height:1; cursor:pointer; font-family:inherit;}
+.task-col-add:hover{background:var(--surface); color:var(--accent);}
+.task-col-head + .task-quick.compact{margin:0 0 8px;}
 .task-status-dot{width:8px; height:8px; border-radius:50%; background:var(--ink-faint);}
 .task-status-dot.is-next{background:#0E7490;}
 .task-status-dot.is-doing{background:var(--accent);}
