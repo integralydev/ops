@@ -12,6 +12,7 @@ import { useProspectEvents, useProspects } from "@/lib/hooks/useProspects";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import {
+  PROSPECT_PRIORITIES,
   PROSPECT_STALE_DAYS,
   fmtDate,
   fmtDateTime,
@@ -21,7 +22,7 @@ import {
   prospectStatusLabel,
   prospectZoneLabel,
 } from "@/lib/format";
-import type { Prospect, ProspectEvent } from "@/lib/database.types";
+import type { Prospect, ProspectEvent, ProspectPriority } from "@/lib/database.types";
 
 export default function ProspectPage() {
   const { id } = useParams<{ id: string }>();
@@ -173,6 +174,10 @@ function FollowUp({ prospect: p, onUpdated }: { prospect: Prospect; onUpdated: (
         </div>
       </div>
       <div className="field">
+        <label>Prioridad</label>
+        <PrioritySegment prospect={p} onUpdated={onUpdated} />
+      </div>
+      <div className="field">
         <label>
           Próxima acción
           {overdue && <span className="com-overdue-tag">Vencida</span>}
@@ -292,6 +297,36 @@ function Closed({ prospect: p, onUpdated }: { prospect: Prospect; onUpdated: (ro
           }}
         />
       )}
+    </div>
+  );
+}
+
+// Prioridad en la ficha: — · A · B · C, se guarda al momento
+function PrioritySegment({ prospect: p, onUpdated }: { prospect: Prospect; onUpdated: (row: Prospect) => void }) {
+  const options: { value: ProspectPriority | null; label: string; hint: string }[] = [
+    { value: null, label: "—", hint: "Sin prioridad" },
+    ...PROSPECT_PRIORITIES.map((x) => ({ value: x.value, label: x.value, hint: x.hint })),
+  ];
+  async function set(value: ProspectPriority | null) {
+    if (value === (p.priority || null)) return;
+    onUpdated({ ...p, priority: value });
+    const row = await updateProspect(p.id, { priority: value });
+    onUpdated(row || p);
+  }
+  return (
+    <div className="seg prio-seg" role="group" aria-label="Prioridad">
+      {options.map((o) => (
+        <button
+          key={o.label}
+          type="button"
+          className={((p.priority || null) === o.value ? "active " : "") + `is-${o.value || "none"}`}
+          onClick={() => set(o.value)}
+          title={o.hint}
+        >
+          {o.label}
+          {o.value && <span className="prio-hint">{o.hint.toLowerCase()}</span>}
+        </button>
+      ))}
     </div>
   );
 }

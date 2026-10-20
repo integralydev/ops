@@ -586,6 +586,8 @@ create table if not exists prospects (
   sector text not null default '',
   website text not null default '',
   employees text not null default '',
+  -- prioridad: 'A' llamar primero · 'B' después · 'C' poco encaje · null sin prioridad
+  priority text constraint prospects_priority_check check (priority is null or priority in ('A', 'B', 'C')),
   status text not null default 'sin_contactar'
     check (status in ('sin_contactar', 'contactada', 'reunion_hecha', 'propuesta_enviada', 'cerrada', 'descartada')),
   owner_id uuid references profiles (id) on delete set null,

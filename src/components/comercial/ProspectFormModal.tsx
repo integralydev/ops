@@ -5,8 +5,8 @@ import { Modal } from "@/components/Modal";
 import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import { PROSPECT_SOURCES, PROSPECT_STATUSES, PROSPECT_ZONES, normalizeUrl } from "@/lib/format";
-import type { Prospect, ProspectSource, ProspectStatus, ProspectZone } from "@/lib/database.types";
+import { PROSPECT_PRIORITIES, PROSPECT_SOURCES, PROSPECT_STATUSES, PROSPECT_ZONES, normalizeUrl } from "@/lib/format";
+import type { Prospect, ProspectPriority, ProspectSource, ProspectStatus, ProspectZone } from "@/lib/database.types";
 
 /** Personas que pueden llevar empresas en Comercial: admin y comercial. */
 export function useSalesPeople() {
@@ -48,6 +48,7 @@ export function ProspectFormModal({
   const [appCode, setAppCode] = useState(prospect?.app_code || "");
   const [ownerId, setOwnerId] = useState(prospect ? prospect.owner_id || "" : me.id);
   const [sector, setSector] = useState(prospect?.sector || "");
+  const [priority, setPriority] = useState<ProspectPriority | "">(prospect?.priority || "");
   const [website, setWebsite] = useState(prospect?.website || "");
   const [employees, setEmployees] = useState(prospect?.employees || "");
   // La marca de privada se cambia en la ficha; aquí solo al crear (y solo admin)
@@ -75,6 +76,7 @@ export function ProspectFormModal({
       app_code: appCode.trim() || null,
       owner_id: ownerId || null,
       sector: sector.trim(),
+      priority: priority || null,
       website: normalizeUrl(website),
       employees: employees.trim(),
       ...(prospect ? {} : { status, ...(isAdmin && isPrivate ? { is_private: true } : {}) }),
@@ -168,13 +170,26 @@ export function ProspectFormModal({
           </datalist>
         </div>
         <div className="field">
+          <label>Prioridad</label>
+          <select value={priority} onChange={(e) => setPriority(e.target.value as ProspectPriority | "")}>
+            <option value="">Sin prioridad</option>
+            {PROSPECT_PRIORITIES.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.value} · {p.hint}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="field-row">
+        <div className="field">
           <label>Empleados (aprox.)</label>
           <input type="text" value={employees} onChange={(e) => setEmployees(e.target.value)} placeholder="10-50, ~30…" />
         </div>
-      </div>
-      <div className="field">
-        <label>Web</label>
-        <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" />
+        <div className="field">
+          <label>Web</label>
+          <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" />
+        </div>
       </div>
       <div className="field-row">
         <div className="field">

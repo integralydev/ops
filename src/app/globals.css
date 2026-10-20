@@ -471,6 +471,19 @@ span.task-comment-badge{cursor:default;}
 .com-next.is-overdue b::after{content:" · vencida"; font-weight:600;}
 .com-stale{color:var(--danger); font-weight:600;}
 .com-scope{margin-bottom:14px;}
+/* Prioridad A/B/C */
+.prio-select{width:24px; height:22px; margin-right:7px; padding:0; border-radius:6px; border:1px dashed var(--border); background-image:none; background-color:transparent; color:var(--ink-faint); font-family:inherit; font-size:11.5px; font-weight:800; text-align:center; text-align-last:center; cursor:pointer; vertical-align:1px;}
+.prio-select.is-A{background-color:var(--accent); border:1px solid var(--accent); color:var(--accent-ink);}
+.prio-select.is-B{background-color:var(--accent-soft); border:1px solid var(--accent-soft); color:var(--accent-dim);}
+.prio-select.is-C{background-color:var(--surface-2); border:1px solid var(--border); color:var(--ink-faint);}
+.prio-select:hover{border-color:var(--accent);}
+.prio-seg{display:flex; width:max-content; max-width:100%; flex-wrap:wrap;}
+.prio-seg button{display:inline-flex; align-items:baseline; gap:5px;}
+.prio-seg .prio-hint{font-weight:500; font-size:11px; opacity:.75;}
+.prio-seg button.active.is-A{background:var(--accent); color:var(--accent-ink);}
+.prio-seg button.active.is-B{background:var(--accent-soft); color:var(--accent-dim);}
+.com-sort{margin-left:auto;}
+.com-sort + .com-count{margin-left:8px;}
 .com-lock{margin-right:6px; font-size:.85em;}
 .com-sector{display:inline-block; margin-left:8px; padding:0 7px; border-radius:99px; background:var(--surface-2); border:1px solid var(--border); color:var(--ink-soft); font-size:11px; font-weight:500; letter-spacing:0; vertical-align:middle;}
 .com-addr{display:flex; align-items:center; gap:4px; max-width:340px;}

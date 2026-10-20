@@ -202,6 +202,7 @@ export type ProspectStatus =
   | "cerrada"
   | "descartada";
 export type ProspectZone = "rodalies" | "alejados";
+export type ProspectPriority = "A" | "B" | "C";
 export type ProspectSource = "ana" | "silleda" | "pipeline" | "propio" | "prospeccion";
 
 export interface Prospect {
@@ -223,6 +224,8 @@ export interface Prospect {
   website: string;
   /** Tamaño aproximado, texto libre ("10-50", "~30"…). */
   employees: string;
+  /** A = llamar primero · B = después · C = poco encaje · null = sin prioridad. */
+  priority: ProspectPriority | null;
   status: ProspectStatus;
   owner_id: string | null;
   next_action: string;

@@ -6,7 +6,7 @@ import { useAppData } from "@/components/app-data";
 import { Avatar } from "@/components/Avatar";
 import { useProspects } from "@/lib/hooks/useProspects";
 import { ProspectFormModal, useSalesPeople } from "@/components/comercial/ProspectFormModal";
-import { ProspectStatusSelect, isOverdue, isStale, todayISO } from "@/components/comercial/shared";
+import { PrioritySelect, ProspectStatusSelect, isOverdue, isStale, priorityRank, todayISO } from "@/components/comercial/shared";
 import {
   PROSPECT_SOURCES,
   PROSPECT_STALE_DAYS,
@@ -39,6 +39,8 @@ export default function ComercialPage() {
   const [owner, setOwner] = useState("all");
   const [quick, setQuick] = useState<Quick>(null);
   const [sector, setSector] = useState("all");
+  const [priority, setPriority] = useState("all");
+  const [sortBy, setSortBy] = useState<"action" | "priority">("action");
   // Solo admin: todas, solo las compartidas con Comercial o solo las privadas
   // (RLS ya no le manda las privadas a quien no es admin)
   const [scope, setScope] = useState<"all" | "shared" | "private">("all");
@@ -63,6 +65,7 @@ export default function ComercialPage() {
     .filter((p) => source === "all" || p.source === source)
     .filter((p) => owner === "all" || (owner === "none" ? !p.owner_id : p.owner_id === owner))
     .filter((p) => sector === "all" || (sector === "none" ? !p.sector : p.sector === sector))
+    .filter((p) => priority === "all" || (priority === "none" ? !p.priority : p.priority === priority))
     .filter((p) => quick !== "stale" || isStale(p))
     .filter((p) => quick !== "overdue" || isOverdue(p, today))
     .filter(
@@ -74,18 +77,28 @@ export default function ComercialPage() {
         (p.sector || "").toLowerCase().includes(needle) ||
         (p.app_code || "").toLowerCase().includes(needle),
     )
-    // Primero lo que sigue en juego; dentro, lo que tiene acción más próxima
+    // Primero lo que sigue en juego; dentro, lo que tiene acción más próxima.
+    // "Por prioridad": A, B, C y sin prioridad, y dentro de cada una lo mismo.
     .sort(
       (a, b) =>
+        (sortBy === "priority" ? priorityRank(a) - priorityRank(b) : 0) ||
         Number(!isOpen(a)) - Number(!isOpen(b)) ||
         (a.next_action_date || "9999").localeCompare(b.next_action_date || "9999") ||
         a.name.localeCompare(b.name, "es"),
     );
 
   const filtered =
-    !!needle || status !== "all" || zone !== "all" || source !== "all" || owner !== "all" || sector !== "all" || !!quick;
+    !!needle ||
+    status !== "all" ||
+    zone !== "all" ||
+    source !== "all" ||
+    owner !== "all" ||
+    sector !== "all" ||
+    priority !== "all" ||
+    !!quick;
   function clearFilters() {
     setSector("all");
+    setPriority("all");
     setQ("");
     setStatus("all");
     setZone("all");
@@ -195,6 +208,13 @@ export default function ComercialPage() {
               <option value="none">Sin sector</option>
             </select>
           )}
+          <select className="scope-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <option value="all">Todas las prioridades</option>
+            <option value="A">Prioridad A · llamar primero</option>
+            <option value="B">Prioridad B · después</option>
+            <option value="C">Prioridad C · poco encaje</option>
+            <option value="none">Sin prioridad</option>
+          </select>
           <select className="scope-select" value={owner} onChange={(e) => setOwner(e.target.value)}>
             <option value="all">Todos los responsables</option>
             {people.map(([id, t]) => (
@@ -209,6 +229,15 @@ export default function ComercialPage() {
               Quitar filtros
             </button>
           )}
+          <select
+            className="scope-select com-sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "action" | "priority")}
+            title="Ordenar"
+          >
+            <option value="action">⇅ Por próxima acción</option>
+            <option value="priority">⇅ Por prioridad</option>
+          </select>
           <span className="muted com-count">
             {list.length} de {all.length}
           </span>
@@ -241,6 +270,7 @@ export default function ComercialPage() {
                     <tr key={p.id} className="ptable-row" onClick={() => router.push(`/comercial/${p.id}`)}>
                       <td>
                         <div className="ptable-name">
+                          <PrioritySelect prospect={p} onUpdated={upsertLocal} />
                           {p.is_private && (
                             <span className="com-lock" title="Privada: solo la ven los admin">
                               🔒

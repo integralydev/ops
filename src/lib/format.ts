@@ -6,6 +6,7 @@ import type {
   LinkCategory,
   ProjectKind,
   ProjectStatus,
+  ProspectPriority,
   ProspectSource,
   ProspectStatus,
   ProspectZone,
@@ -148,6 +149,12 @@ export const PROSPECT_SOURCES: { value: ProspectSource; label: string }[] = [
   { value: "propio", label: "Propio" },
   { value: "prospeccion", label: "Prospección" },
 ];
+export const PROSPECT_PRIORITIES: { value: ProspectPriority; hint: string }[] = [
+  { value: "A", hint: "Llamar primero" },
+  { value: "B", hint: "Después" },
+  { value: "C", hint: "Poco encaje" },
+];
+
 /** Días sin movimiento a partir de los que una empresa se marca como parada. */
 export const PROSPECT_STALE_DAYS = 7;
 

@@ -2,8 +2,8 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import { PROSPECT_STALE_DAYS, PROSPECT_STATUSES } from "@/lib/format";
-import type { Prospect, ProspectStatus } from "@/lib/database.types";
+import { PROSPECT_PRIORITIES, PROSPECT_STALE_DAYS, PROSPECT_STATUSES } from "@/lib/format";
+import type { Prospect, ProspectPriority, ProspectStatus } from "@/lib/database.types";
 
 /** Fecha de hoy (local) como "YYYY-MM-DD", para comparar con next_action_date. */
 export function todayISO() {
@@ -65,4 +65,45 @@ export function ProspectStatusSelect({
       ))}
     </select>
   );
+}
+
+// Prioridad (A llamar primero · B después · C poco encaje), como pastilla que
+// se cambia al momento. Sin prioridad se ve un "·" discreto para poder ponerla.
+export function PrioritySelect({
+  prospect,
+  onUpdated,
+}: {
+  prospect: Prospect;
+  onUpdated: (row: Prospect) => void;
+}) {
+  const v = prospect.priority || "";
+  return (
+    <select
+      className={`prio-select is-${v || "none"}`}
+      value={v}
+      onClick={(e) => e.stopPropagation()}
+      onChange={async (e) => {
+        const next = (e.target.value || null) as ProspectPriority | null;
+        onUpdated({ ...prospect, priority: next }); // al momento
+        const row = await updateProspect(prospect.id, { priority: next });
+        onUpdated(row || prospect);
+      }}
+      title={
+        v ? `Prioridad ${v}: ${PROSPECT_PRIORITIES.find((p) => p.value === v)?.hint}. Clic para cambiarla` : "Sin prioridad. Clic para ponerla"
+      }
+      aria-label="Prioridad"
+    >
+      <option value="">·</option>
+      {PROSPECT_PRIORITIES.map((p) => (
+        <option key={p.value} value={p.value} title={p.hint}>
+          {p.value}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Orden por prioridad: A, B, C y al final las que no tienen. */
+export function priorityRank(p: Prospect) {
+  return p.priority === "A" ? 0 : p.priority === "B" ? 1 : p.priority === "C" ? 2 : 3;
 }
