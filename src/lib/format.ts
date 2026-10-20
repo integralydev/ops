@@ -146,6 +146,7 @@ export const PROSPECT_SOURCES: { value: ProspectSource; label: string }[] = [
   { value: "silleda", label: "Feria de Silleda" },
   { value: "pipeline", label: "Pipeline parado" },
   { value: "propio", label: "Propio" },
+  { value: "prospeccion", label: "Prospección" },
 ];
 /** Días sin movimiento a partir de los que una empresa se marca como parada. */
 export const PROSPECT_STALE_DAYS = 7;

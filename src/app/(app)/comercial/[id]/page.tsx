@@ -67,7 +67,14 @@ export default function ProspectPage() {
           <Link href="/comercial" className="com-back">
             ← Comercial
           </Link>
-          <h1>{p.name}</h1>
+          <h1>
+            {p.is_private && (
+              <span className="com-lock" title="Privada: solo la ven los admin">
+                🔒
+              </span>
+            )}
+            {p.name}
+          </h1>
           <div className="topbar-sub">
             {[p.city, p.province].filter(Boolean).join(" · ") || "Sin población"} · {prospectZoneLabel(p.zone)} ·{" "}
             {prospectSourceLabel(p.source)}
@@ -90,20 +97,31 @@ export default function ProspectPage() {
             {/* key: si otra persona cambia la próxima acción, el formulario se pone al día */}
             <FollowUp key={`${p.next_action}|${p.next_action_date}`} prospect={p} onUpdated={upsertLocal} />
             {p.status === "cerrada" && <Closed prospect={p} onUpdated={upsertLocal} />}
+            {isAdmin && <PrivacyCard prospect={p} onUpdated={upsertLocal} />}
             <ContactCard prospect={p} />
           </div>
           <History prospect={p} />
         </div>
       </div>
 
-      {showEdit && <ProspectFormModal prospect={p} onClose={() => setShowEdit(false)} onSaved={upsertLocal} />}
+      {showEdit && (
+        <ProspectFormModal
+          prospect={p}
+          sectors={[...new Set(Object.values(prospects).map((x) => x.sector).filter(Boolean))].sort()}
+          onClose={() => setShowEdit(false)}
+          onSaved={upsertLocal}
+        />
+      )}
     </>
   );
 }
 
 // Estado, responsable y próxima acción: lo que se toca a diario.
 function FollowUp({ prospect: p, onUpdated }: { prospect: Prospect; onUpdated: (row: Prospect) => void }) {
-  const people = useSalesPeople();
+  const { team } = useAppData();
+  const salesPeople = useSalesPeople();
+  // Una privada solo la puede llevar un admin
+  const people = p.is_private ? salesPeople.filter(([id]) => team[id]?.role === "admin") : salesPeople;
   const [action, setAction] = useState(p.next_action);
   const [date, setDate] = useState(p.next_action_date || "");
   const [saving, setSaving] = useState(false);
@@ -278,6 +296,53 @@ function Closed({ prospect: p, onUpdated }: { prospect: Prospect; onUpdated: (ro
   );
 }
 
+// Solo admin: marcar o desmarcar la empresa como privada (prospección propia)
+function PrivacyCard({ prospect: p, onUpdated }: { prospect: Prospect; onUpdated: (row: Prospect) => void }) {
+  const { team, nameFor } = useAppData();
+  const [saving, setSaving] = useState(false);
+  const ownerIsComercial = !!p.owner_id && team[p.owner_id]?.role === "comercial";
+
+  async function toggle(next: boolean) {
+    if (next && ownerIsComercial) {
+      toast(`La lleva ${nameFor(p.owner_id).split(" ")[0]}: una empresa suya no puede pasar a privada.`);
+      return;
+    }
+    if (!next && !confirm("Al quitar la marca, Albert (rol comercial) podrá ver esta empresa y todo su historial. ¿Seguir?"))
+      return;
+    setSaving(true);
+    const row = await updateProspect(p.id, { is_private: next });
+    setSaving(false);
+    if (row) {
+      onUpdated(row);
+      toast(next ? "Empresa privada: solo la veis los admin" : "Empresa compartida con Comercial");
+    }
+  }
+
+  return (
+    <div className="card pad">
+      <label className="pref-row" style={{ padding: 0, borderBottom: "none", cursor: ownerIsComercial && !p.is_private ? "not-allowed" : "pointer" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="pref-label">🔒 Privada (solo admin)</div>
+          <div className="pref-hint">
+            {ownerIsComercial && !p.is_private
+              ? `La lleva ${nameFor(p.owner_id).split(" ")[0]}: no puede pasar a privada.`
+              : p.is_private
+                ? "Solo la veis los admin. Albert no la ve en la lista, la ficha ni el historial."
+                : "Compartida: la ve todo el equipo de Comercial."}
+          </div>
+        </div>
+        <input
+          type="checkbox"
+          className="switch"
+          checked={p.is_private}
+          disabled={saving || (ownerIsComercial && !p.is_private)}
+          onChange={(e) => toggle(e.target.checked)}
+        />
+      </label>
+    </div>
+  );
+}
+
 function ContactCard({ prospect: p }: { prospect: Prospect }) {
   const tel = (v: string) => `tel:${v.replace(/\s+/g, "")}`;
   return (
@@ -305,6 +370,20 @@ function ContactCard({ prospect: p }: { prospect: Prospect }) {
         <dd>{prospectZoneLabel(p.zone)}</dd>
         <dt>Origen</dt>
         <dd>{prospectSourceLabel(p.source)}</dd>
+        <dt>Sector</dt>
+        <dd>{p.sector || "—"}</dd>
+        <dt>Empleados</dt>
+        <dd>{p.employees || "—"}</dd>
+        <dt>Web</dt>
+        <dd>
+          {p.website ? (
+            <a href={p.website} target="_blank" rel="noopener noreferrer">
+              {p.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")} ↗
+            </a>
+          ) : (
+            "—"
+          )}
+        </dd>
         <dt>Código App</dt>
         <dd>{p.app_code || "—"}</dd>
         <dt>Alta</dt>

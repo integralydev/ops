@@ -5,7 +5,7 @@ import { Modal } from "@/components/Modal";
 import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
-import { PROSPECT_SOURCES, PROSPECT_STATUSES, PROSPECT_ZONES } from "@/lib/format";
+import { PROSPECT_SOURCES, PROSPECT_STATUSES, PROSPECT_ZONES, normalizeUrl } from "@/lib/format";
 import type { Prospect, ProspectSource, ProspectStatus, ProspectZone } from "@/lib/database.types";
 
 /** Personas que pueden llevar empresas en Comercial: admin y comercial. */
@@ -20,15 +20,21 @@ export function useSalesPeople() {
 // próxima acción se cambian desde la lista o la ficha.
 export function ProspectFormModal({
   prospect,
+  sectors = [],
+  startPrivate = false,
   onClose,
   onSaved,
 }: {
   prospect?: Prospect;
+  /** Sectores que ya existen, como sugerencias. */
+  sectors?: string[];
+  /** Nueva empresa ya marcada como privada (desde "Mi prospección"). */
+  startPrivate?: boolean;
   onClose: () => void;
   onSaved?: (row: Prospect) => void;
 }) {
-  const { me } = useAppData();
-  const people = useSalesPeople();
+  const { me, isAdmin, team } = useAppData();
+  const salesPeople = useSalesPeople();
   const [name, setName] = useState(prospect?.name || "");
   const [zone, setZone] = useState<ProspectZone | "">(prospect?.zone || "");
   const [source, setSource] = useState<ProspectSource>(prospect?.source || "propio");
@@ -41,6 +47,13 @@ export function ProspectFormModal({
   const [email, setEmail] = useState(prospect?.email || "");
   const [appCode, setAppCode] = useState(prospect?.app_code || "");
   const [ownerId, setOwnerId] = useState(prospect ? prospect.owner_id || "" : me.id);
+  const [sector, setSector] = useState(prospect?.sector || "");
+  const [website, setWebsite] = useState(prospect?.website || "");
+  const [employees, setEmployees] = useState(prospect?.employees || "");
+  // La marca de privada se cambia en la ficha; aquí solo al crear (y solo admin)
+  const [isPrivate, setIsPrivate] = useState(prospect ? prospect.is_private : startPrivate && isAdmin);
+  // Una privada solo la puede llevar un admin
+  const people = isPrivate ? salesPeople.filter(([id]) => team[id]?.role === "admin") : salesPeople;
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -61,7 +74,10 @@ export function ProspectFormModal({
       email: email.trim(),
       app_code: appCode.trim() || null,
       owner_id: ownerId || null,
-      ...(prospect ? {} : { status }),
+      sector: sector.trim(),
+      website: normalizeUrl(website),
+      employees: employees.trim(),
+      ...(prospect ? {} : { status, ...(isAdmin && isPrivate ? { is_private: true } : {}) }),
     };
     const supabase = createClient();
     const { data, error } = prospect
@@ -137,6 +153,31 @@ export function ProspectFormModal({
       </div>
       <div className="field-row">
         <div className="field">
+          <label>Sector</label>
+          <input
+            type="text"
+            list="prospect-sectors"
+            value={sector}
+            onChange={(e) => setSector(e.target.value)}
+            placeholder="Construcción, Alimentación…"
+          />
+          <datalist id="prospect-sectors">
+            {sectors.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </div>
+        <div className="field">
+          <label>Empleados (aprox.)</label>
+          <input type="text" value={employees} onChange={(e) => setEmployees(e.target.value)} placeholder="10-50, ~30…" />
+        </div>
+      </div>
+      <div className="field">
+        <label>Web</label>
+        <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" />
+      </div>
+      <div className="field-row">
+        <div className="field">
           <label>Responsable</label>
           <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
             <option value="">Sin responsable</option>
@@ -152,6 +193,22 @@ export function ProspectFormModal({
           <input type="text" value={appCode} onChange={(e) => setAppCode(e.target.value)} />
         </div>
       </div>
+      {!prospect && isAdmin && (
+        <label className="links-check" style={{ marginBottom: 14 }}>
+          <input
+            type="checkbox"
+            checked={isPrivate}
+            onChange={(e) => {
+              setIsPrivate(e.target.checked);
+              // Las privadas las lleva un admin: si el responsable no lo es, pasa a ti
+              if (e.target.checked && ownerId && team[ownerId]?.role !== "admin") setOwnerId(me.id);
+            }}
+          />
+          <span>
+            🔒 Privada: solo la ven los admin (tu prospección). Albert no la verá.
+          </span>
+        </label>
+      )}
       {!prospect && (
         <div className="field">
           <label>Estado</label>

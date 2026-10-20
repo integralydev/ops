@@ -202,7 +202,7 @@ export type ProspectStatus =
   | "cerrada"
   | "descartada";
 export type ProspectZone = "rodalies" | "alejados";
-export type ProspectSource = "ana" | "silleda" | "pipeline" | "propio";
+export type ProspectSource = "ana" | "silleda" | "pipeline" | "propio" | "prospeccion";
 
 export interface Prospect {
   id: string;
@@ -217,6 +217,12 @@ export interface Prospect {
   email: string;
   app_code: string | null;
   source: ProspectSource;
+  /** Privada: solo la ven los admin (prospección de Eloi). */
+  is_private: boolean;
+  sector: string;
+  website: string;
+  /** Tamaño aproximado, texto libre ("10-50", "~30"…). */
+  employees: string;
   status: ProspectStatus;
   owner_id: string | null;
   next_action: string;

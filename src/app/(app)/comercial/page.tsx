@@ -26,7 +26,7 @@ type Quick = "stale" | "overdue" | null;
 // Comercial: embudo de empresas a las que queremos vender, antes de que haya
 // proyecto. Solo la ven admin y comercial (RLS en prospects).
 export default function ComercialPage() {
-  const { nameFor } = useAppData();
+  const { nameFor, isAdmin } = useAppData();
   const people = useSalesPeople();
   const { prospects, loading, upsertLocal } = useProspects();
   const router = useRouter();
@@ -38,8 +38,18 @@ export default function ComercialPage() {
   const [source, setSource] = useState("all");
   const [owner, setOwner] = useState("all");
   const [quick, setQuick] = useState<Quick>(null);
+  const [sector, setSector] = useState("all");
+  // Solo admin: todas, solo las compartidas con Comercial o solo las privadas
+  // (RLS ya no le manda las privadas a quien no es admin)
+  const [scope, setScope] = useState<"all" | "shared" | "private">("all");
 
-  const all = useMemo(() => Object.values(prospects), [prospects]);
+  const everything = useMemo(() => Object.values(prospects), [prospects]);
+  // El resumen y la lista cuentan según lo elegido arriba
+  const all = everything.filter((p) => scope === "all" || (scope === "private" ? p.is_private : !p.is_private));
+  const sectors = [...new Set(everything.map((p) => (p.sector || "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "es"),
+  );
+  const privateCount = everything.filter((p) => p.is_private).length;
   const today = todayISO();
   const countBy = (s: ProspectStatus) => all.filter((p) => p.status === s).length;
   const staleCount = all.filter((p) => isStale(p)).length;
@@ -52,6 +62,7 @@ export default function ComercialPage() {
     .filter((p) => zone === "all" || (zone === "none" ? !p.zone : p.zone === zone))
     .filter((p) => source === "all" || p.source === source)
     .filter((p) => owner === "all" || (owner === "none" ? !p.owner_id : p.owner_id === owner))
+    .filter((p) => sector === "all" || (sector === "none" ? !p.sector : p.sector === sector))
     .filter((p) => quick !== "stale" || isStale(p))
     .filter((p) => quick !== "overdue" || isOverdue(p, today))
     .filter(
@@ -60,6 +71,7 @@ export default function ComercialPage() {
         p.name.toLowerCase().includes(needle) ||
         p.city.toLowerCase().includes(needle) ||
         (p.address || "").toLowerCase().includes(needle) ||
+        (p.sector || "").toLowerCase().includes(needle) ||
         (p.app_code || "").toLowerCase().includes(needle),
     )
     // Primero lo que sigue en juego; dentro, lo que tiene acción más próxima
@@ -70,8 +82,10 @@ export default function ComercialPage() {
         a.name.localeCompare(b.name, "es"),
     );
 
-  const filtered = !!needle || status !== "all" || zone !== "all" || source !== "all" || owner !== "all" || !!quick;
+  const filtered =
+    !!needle || status !== "all" || zone !== "all" || source !== "all" || owner !== "all" || sector !== "all" || !!quick;
   function clearFilters() {
+    setSector("all");
     setQ("");
     setStatus("all");
     setZone("all");
@@ -92,6 +106,19 @@ export default function ComercialPage() {
         </button>
       </div>
       <div className="content wide">
+        {isAdmin && (
+          <div className="seg com-scope" role="group" aria-label="Qué empresas ver">
+            <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>
+              Todas <span className="kind-count">{everything.length}</span>
+            </button>
+            <button className={scope === "shared" ? "active" : ""} onClick={() => setScope("shared")}>
+              Compartidas <span className="kind-count">{everything.length - privateCount}</span>
+            </button>
+            <button className={scope === "private" ? "active" : ""} onClick={() => setScope("private")}>
+              🔒 Mi prospección <span className="kind-count">{privateCount}</span>
+            </button>
+          </div>
+        )}
         <div className="com-summary">
           {PROSPECT_STATUSES.map((s) => (
             <button
@@ -157,6 +184,17 @@ export default function ComercialPage() {
               </option>
             ))}
           </select>
+          {sectors.length > 0 && (
+            <select className="scope-select" value={sector} onChange={(e) => setSector(e.target.value)}>
+              <option value="all">Todos los sectores</option>
+              {sectors.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+              <option value="none">Sin sector</option>
+            </select>
+          )}
           <select className="scope-select" value={owner} onChange={(e) => setOwner(e.target.value)}>
             <option value="all">Todos los responsables</option>
             {people.map(([id, t]) => (
@@ -202,7 +240,15 @@ export default function ComercialPage() {
                   return (
                     <tr key={p.id} className="ptable-row" onClick={() => router.push(`/comercial/${p.id}`)}>
                       <td>
-                        <div className="ptable-name">{p.name}</div>
+                        <div className="ptable-name">
+                          {p.is_private && (
+                            <span className="com-lock" title="Privada: solo la ven los admin">
+                              🔒
+                            </span>
+                          )}
+                          {p.name}
+                          {p.sector && <span className="com-sector">{p.sector}</span>}
+                        </div>
                         <div className="ptable-sub com-addr">
                           <span className="com-addr-text" title={[p.address, p.city, p.province].filter(Boolean).join(", ")}>
                             {[p.address, p.city].filter(Boolean).join(" · ") || p.province || "—"}
@@ -262,6 +308,8 @@ export default function ComercialPage() {
 
       {showNew && (
         <ProspectFormModal
+          sectors={sectors}
+          startPrivate={isAdmin && scope === "private"}
           onClose={() => setShowNew(false)}
           onSaved={(row) => {
             upsertLocal(row);
