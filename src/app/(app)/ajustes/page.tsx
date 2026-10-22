@@ -6,6 +6,7 @@ import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import type { Profile } from "@/lib/database.types";
+import { MfaSettings } from "@/components/MfaSettings";
 
 type Pref = "notify_task_assigned" | "notify_task_comments";
 
@@ -77,6 +78,9 @@ export default function AjustesPage() {
         <p className="muted" style={{ fontSize: 12.3, marginTop: 10 }}>
           Los avisos llegan a {me.email || "tu email"}. Dentro del OPS verás siempre los comentarios nuevos marcados en las tareas.
         </p>
+
+        <div className="section-title">Seguridad</div>
+        <MfaSettings />
 
         <div className="section-title">Cuenta</div>
         <div className="card">

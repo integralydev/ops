@@ -90,6 +90,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
             <div className="nav-section">Administración</div>
             <NavItem href="/clients" icon="🧾" label="Clientes" onNavigate={() => setOpen(false)} />
             {isAdmin && <NavItem href="/team" icon="👥" label="Equipo" onNavigate={() => setOpen(false)} />}
+            {me.isOwner && <NavItem href="/finanzas" icon="💶" label="Finanzas" onNavigate={() => setOpen(false)} />}
           </>
         )}
         <div className="sidebar-foot">
@@ -152,7 +153,7 @@ export default function AppShell({
   me,
   children,
 }: {
-  me: { id: string; email: string; full_name: string | null; role: Role };
+  me: { id: string; email: string; full_name: string | null; role: Role; isOwner?: boolean };
   children: React.ReactNode;
 }) {
   return (

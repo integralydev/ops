@@ -29,6 +29,11 @@ export default async function AuthenticatedLayout({
 
   if (!profile.full_name) redirect("/onboarding");
 
+  // Propietario (finanzas): lo decide la base de datos. Si la función aún no
+  // existe o falla, se trata como no propietario.
+  const { data: owner } = await supabase.rpc("is_owner");
+  const isOwner = owner === true;
+
   return (
     <AppShell
       me={{
@@ -36,6 +41,7 @@ export default async function AuthenticatedLayout({
         email: user.email || "",
         full_name: profile.full_name,
         role: profile.role,
+        isOwner,
       }}
     >
       {children}

@@ -9,6 +9,8 @@ interface Me {
   email: string;
   full_name: string | null;
   role: Role;
+  /** Propietario: acceso a Finanzas (además, la base de datos exige el segundo paso). */
+  isOwner?: boolean;
 }
 
 interface AppDataValue {
