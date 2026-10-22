@@ -22,6 +22,8 @@ export type FinProject = {
   position: number;
 };
 
+export type RecurrenceStatus = "activa" | "por_activar" | "cancelada";
+
 export type FinRecurrence = {
   id: string;
   fin_project_id: string;
@@ -31,7 +33,44 @@ export type FinRecurrence = {
   dev_usd_month: number;
   dev_txt: string;
   infra_eur_month: number;
+  /** Sincronizado con status (activa ⇔ true). */
   active: boolean;
+  /** Calendario: AAAA-MM. Sin start_month = sin calendario (cuenta desde ya). */
+  start_month?: string | null;
+  end_month?: string | null;
+  billing_day?: number | null;
+  method?: "stripe" | "transferencia" | "otro" | null;
+  status?: RecurrenceStatus;
+};
+
+export type FinScheduled = {
+  id: string;
+  direction: "entrada" | "salida";
+  concept: string;
+  counterparty: string;
+  fin_project_id: string | null;
+  amount_eur: number | null;
+  amount_usd: number | null;
+  frequency: "unica" | "mensual" | "trimestral";
+  date: string;
+  end_date: string | null;
+  certainty: "confirmado" | "probable";
+  probability: number | null;
+  note: string;
+  closed: boolean;
+};
+
+export type FinPayment = {
+  id: string;
+  date: string;
+  concept: string;
+  counterparty: string;
+  amount_eur: number | null;
+  amount_usd: number | null;
+  fin_project_id: string | null;
+  kind: "dev" | "comision" | "comercial" | "gasto_fijo" | "otro";
+  scheduled_id: string | null;
+  period: string | null;
 };
 
 export type FinInvoice = {
@@ -47,6 +86,9 @@ export type FinInvoice = {
   kind: "implementacion" | "mensualidad";
   status: "cobrada" | "pendiente" | "parcial" | "abono";
   date_txt: string | null;
+  fin_project_id?: string | null;
+  scheduled_id?: string | null;
+  scheduled_period?: string | null;
 };
 
 export type FinReceivable = {
@@ -73,12 +115,25 @@ export function parseProject(r: Record<string, unknown>): FinProject {
   };
 }
 export function parseRecurrence(r: Record<string, unknown>): FinRecurrence {
+  const rec = r as unknown as FinRecurrence;
   return {
-    ...(r as unknown as FinRecurrence),
+    ...rec,
     client_eur_month: num(r.client_eur_month),
     dev_usd_month: num(r.dev_usd_month),
     infra_eur_month: num(r.infra_eur_month),
+    status: rec.status || (rec.active ? "activa" : "por_activar"),
   };
+}
+export function parseScheduled(r: Record<string, unknown>): FinScheduled {
+  return {
+    ...(r as unknown as FinScheduled),
+    amount_eur: numOrNull(r.amount_eur),
+    amount_usd: numOrNull(r.amount_usd),
+    probability: numOrNull(r.probability),
+  };
+}
+export function parsePayment(r: Record<string, unknown>): FinPayment {
+  return { ...(r as unknown as FinPayment), amount_eur: numOrNull(r.amount_eur), amount_usd: numOrNull(r.amount_usd) };
 }
 export function parseInvoice(r: Record<string, unknown>): FinInvoice {
   return {
@@ -122,10 +177,30 @@ export function recurrencesOf(p: FinProject, recs: FinRecurrence[]) {
   return recs.filter((r) => r.fin_project_id === p.id).sort((a, b) => a.slot - b.slot);
 }
 
-/** Primer tramo de recurrencia (el que cuenta para el MRR, como `rec` en el panel). */
-const rec1 = (p: FinProject, recs: FinRecurrence[]) => recurrencesOf(p, recs).find((r) => r.slot === 1) || null;
+/** Mes actual (local) como AAAA-MM. */
+export function monthOf(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+/** ¿El mes cae dentro del calendario del tramo? (sin calendario = siempre). */
+export function inCalendar(r: FinRecurrence, month: string) {
+  if (!r.start_month) return true;
+  return month >= r.start_month && (!r.end_month || month <= r.end_month);
+}
 
-export function computeKpis(projects: FinProject[], recs: FinRecurrence[]) {
+/**
+ * Tramo en curso de un proyecto (el que cuenta para el MRR): el que tiene
+ * calendario y cubre el mes actual; si ninguno lo tiene, el tramo 1 (como en
+ * la fase 1 y en el panel).
+ */
+export function currentRecurrence(p: FinProject, recs: FinRecurrence[], month = monthOf()) {
+  const rs = recurrencesOf(p, recs).filter((r) => r.status !== "cancelada");
+  const byCalendar = rs.find((r) => r.start_month && inCalendar(r, month));
+  if (byCalendar) return byCalendar;
+  return rs.find((r) => r.slot === 1 && !r.start_month) || rs.find((r) => r.slot === 1 && inCalendar(r, month)) || null;
+}
+
+export function computeKpis(projects: FinProject[], recs: FinRecurrence[], month = monthOf()) {
+  const rec1 = (p: FinProject, rs: FinRecurrence[]) => currentRecurrence(p, rs, month);
   const activos = projects.filter((p) => p.status === "activo");
   const facturado = projects.reduce((s, p) => s + p.agreed_eur, 0);
   const cobrado = projects.reduce((s, p) => s + p.collected_eur, 0);
@@ -189,9 +264,21 @@ export function projectMargin(p: FinProject, fx: number) {
   return { de, margen, pct, bar, pend: pendDe(p), devTxt };
 }
 
-/** Resumen por mes, calculado desde las facturas. */
-export function computePeriods(invoices: FinInvoice[], fx: number) {
-  const meses = [...new Set(invoices.map((f) => f.date.slice(0, 7)))].sort();
+/** Importe en € de un pago o programado (USD × tipo de cambio). */
+export const amountEur = (x: { amount_eur: number | null; amount_usd: number | null }, fx: number) =>
+  x.amount_eur != null ? x.amount_eur : (x.amount_usd || 0) * fx;
+
+/**
+ * Resumen por mes, calculado desde las facturas (y, desde la fase 2, los
+ * pagos hechos: Gastos dev = pagos de tipo dev; Beneficio neto = cobrado −
+ * comisiones bancarias − todos los pagos hechos del mes).
+ */
+export function computePeriods(invoices: FinInvoice[], fx: number, payments?: FinPayment[]) {
+  const meses = [
+    ...new Set([...invoices.map((f) => f.date.slice(0, 7)), ...(payments || []).map((p) => p.date.slice(0, 7))]),
+  ].sort();
+  const paid = (m: string, filtro: (p: FinPayment) => boolean = () => true) =>
+    (payments || []).filter((p) => p.date.slice(0, 7) === m && filtro(p)).reduce((s, p) => s + amountEur(p, fx), 0);
   const suma = (m: string, filtro: (f: FinInvoice) => boolean) =>
     invoices.filter((f) => f.date.slice(0, 7) === m && filtro(f)).reduce((s, f) => s + f.eur, 0);
   // Cobrado = Implementación + Mensualidades (lo que no es mensualidad cuenta como implementación)
@@ -202,18 +289,23 @@ export function computePeriods(invoices: FinInvoice[], fx: number) {
     invoices
       .filter((f) => f.date.slice(0, 7) === m && f.status === "cobrada" && f.usd_received != null)
       .reduce((s, f) => s + Math.max(0, (f.usd || 0) - (f.usd_received || 0)) * fx, 0);
-  return meses.map((m) => ({
-    month: m,
-    label: monthLabel(m),
-    facturado: suma(m, () => true),
-    cobrado: suma(m, (f) => f.status === "cobrada"),
-    cobradoImpl: suma(m, cobradaImpl),
-    cobradoMens: suma(m, cobradaMens),
-    comisiones: comisiones(m),
-    // Vacías, como en el panel (fase posterior: tabla de pagos al dev)
-    gastosDev: null as number | null,
-    beneficioNeto: null as number | null,
-  }));
+  return meses.map((m) => {
+    const cobrado = suma(m, (f) => f.status === "cobrada");
+    const com = comisiones(m);
+    return {
+      month: m,
+      label: monthLabel(m),
+      facturado: suma(m, () => true),
+      cobrado,
+      cobradoImpl: suma(m, cobradaImpl),
+      cobradoMens: suma(m, cobradaMens),
+      comisiones: com,
+      // Sin pagos cargados quedan vacías, como en el panel
+      gastosDev: payments ? paid(m, (p) => p.kind === "dev") : (null as number | null),
+      salidas: payments ? paid(m) : (null as number | null),
+      beneficioNeto: payments ? cobrado - com - paid(m) : (null as number | null),
+    };
+  });
 }
 
 /** Chequeo de integridad: los cobros pendientes (en KPI) deben sumar lo pendiente por proyecto. */
@@ -233,4 +325,242 @@ export function invoiceAmount(f: FinInvoice) {
   if (f.usd) return { main: usd2(f.usd), sub: `(${eur0(f.eur)})` };
   if (f.aprox) return { main: `~${eur0(f.eur)}`, sub: `(${f.aprox})` };
   return { main: eur0(f.eur), sub: "" };
+}
+
+// ---------------------------------------------------------------------------
+// Previsión (fase 2): lo que va a entrar y salir
+// ---------------------------------------------------------------------------
+// Reglas:
+// · Entradas confirmadas de un mes: mensualidades activas dentro de su
+//   calendario (salvo que ese mes ya tengan factura de mensualidad: entonces
+//   cuenta la factura), facturas pendientes de ese mes y programados de
+//   entrada confirmados. Lo pendiente de meses pasados cuenta en el mes actual
+//   como "vencido".
+// · Salidas: SOLO programados de salida (el coste de dev/infra de los tramos
+//   es una media para la rentabilidad y no entra nunca en la previsión).
+// · Probable: aparte, nunca mezclado con lo confirmado; ponderado por su
+//   probabilidad en el gráfico.
+// · Meses pasados: entra = facturas cobradas; sale = pagos hechos.
+
+export type Movement = {
+  key: string;
+  date: string; // YYYY-MM-DD (fecha prevista)
+  direction: "entrada" | "salida";
+  concept: string;
+  counterparty: string;
+  eur: number; // importe completo en €
+  usd?: number | null;
+  probable: boolean;
+  probability: number; // 0-100 (100 si es confirmado)
+  overdue: boolean; // de un mes pasado y aún sin cobrar / pagar
+  source: "mensualidad" | "factura" | "programado";
+  scheduledId?: string;
+  period?: string; // fecha de la cuota del programado
+  invoiceId?: string;
+  recurrenceId?: string;
+  finProjectId?: string | null;
+};
+
+const pad = (n: number) => String(n).padStart(2, "0");
+export const addMonths = (month: string, k: number) => {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1 + k, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+};
+const lastDay = (month: string) => {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+};
+/** Fecha del día `day` de un mes, sin pasarse del último día. */
+const dayIn = (month: string, day: number) => `${month}-${pad(Math.min(day, lastDay(month)))}`;
+export const todayISO = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/** Cuotas de un programado entre dos meses (incluidos). */
+export function occurrences(s: FinScheduled, fromMonth: string, toMonth: string) {
+  if (s.closed) return [];
+  const startMonth = s.date.slice(0, 7);
+  const day = Number(s.date.slice(8, 10));
+  if (s.frequency === "unica") return startMonth >= fromMonth && startMonth <= toMonth ? [s.date] : [];
+  const step = s.frequency === "trimestral" ? 3 : 1;
+  const out: string[] = [];
+  for (let k = 0, m = startMonth; m <= toMonth && k < 600; k++, m = addMonths(startMonth, k * step)) {
+    const date = dayIn(m, day);
+    if (s.end_date && date > s.end_date) break;
+    if (m >= fromMonth) out.push(date);
+  }
+  return out;
+}
+
+type ForecastInput = {
+  fx: number;
+  projects: FinProject[];
+  recs: FinRecurrence[];
+  invoices: FinInvoice[];
+  scheduled: FinScheduled[];
+  payments: FinPayment[];
+};
+
+/**
+ * Movimientos previstos desde el mes actual hasta `toMonth`, más lo vencido
+ * (meses anteriores sin cobrar/pagar, con fecha original y overdue = true).
+ */
+export function forecastMovements(input: ForecastInput, toMonth: string, today = todayISO()) {
+  const { fx, projects, recs, invoices, scheduled, payments } = input;
+  const cur = today.slice(0, 7);
+  const out: Movement[] = [];
+  const projName = (id?: string | null) => projects.find((p) => p.id === id)?.name || "";
+
+  // Cuotas de programados ya saldadas (pago hecho o factura emitida)
+  const done = new Set<string>();
+  payments.forEach((p) => p.scheduled_id && p.period && done.add(`${p.scheduled_id}|${p.period}`));
+  invoices.forEach((f) => f.scheduled_id && f.scheduled_period && done.add(`${f.scheduled_id}|${f.scheduled_period}`));
+
+  // 1) Facturas pendientes (o parciales): en su mes; las de meses pasados, vencidas
+  for (const f of invoices) {
+    if (f.status !== "pendiente" && f.status !== "parcial") continue;
+    if (f.date.slice(0, 7) > toMonth) continue;
+    out.push({
+      key: `inv-${f.id}`,
+      date: f.date,
+      direction: "entrada",
+      concept: f.concept || `Factura ${f.number}`,
+      counterparty: f.client,
+      eur: f.eur,
+      usd: f.usd,
+      probable: false,
+      probability: 100,
+      overdue: f.date.slice(0, 7) < cur,
+      source: "factura",
+      invoiceId: f.id,
+      finProjectId: f.fin_project_id ?? null,
+    });
+  }
+
+  // 2) Mensualidades activas dentro de su calendario, salvo que ese mes ya
+  //    tengan factura de mensualidad del mismo proyecto
+  const billedMonths = new Set(
+    invoices.filter((f) => f.kind === "mensualidad" && f.fin_project_id).map((f) => `${f.fin_project_id}|${f.date.slice(0, 7)}`),
+  );
+  for (const r of recs) {
+    if (r.status !== "activa") continue;
+    for (let m = cur; m <= toMonth; m = addMonths(m, 1)) {
+      if (!inCalendar(r, m)) continue;
+      if (billedMonths.has(`${r.fin_project_id}|${m}`)) continue;
+      out.push({
+        key: `rec-${r.id}-${m}`,
+        date: dayIn(m, r.billing_day || 1),
+        direction: "entrada",
+        concept: `Mensualidad${r.title ? ` · ${r.title}` : ""}`,
+        counterparty: projName(r.fin_project_id),
+        eur: r.client_eur_month,
+        probable: false,
+        probability: 100,
+        overdue: false,
+        source: "mensualidad",
+        recurrenceId: r.id,
+        finProjectId: r.fin_project_id,
+      });
+    }
+  }
+
+  // 3) Programados (entradas y salidas, confirmados y probables)
+  for (const s of scheduled) {
+    // Lo vencido viene de cualquier fecha anterior; lo futuro, hasta toMonth
+    for (const date of occurrences(s, s.date.slice(0, 7), toMonth)) {
+      if (done.has(`${s.id}|${date}`)) continue;
+      const probable = s.certainty === "probable";
+      const overdue = date.slice(0, 7) < cur;
+      if (overdue && probable) continue; // un probable que no llegó no es "vencido"
+      out.push({
+        key: `sch-${s.id}-${date}`,
+        date,
+        direction: s.direction,
+        concept: s.concept,
+        counterparty: s.counterparty || projName(s.fin_project_id),
+        eur: amountEur(s, fx),
+        usd: s.amount_usd,
+        probable,
+        probability: probable ? (s.probability ?? 50) : 100,
+        overdue,
+        source: "programado",
+        scheduledId: s.id,
+        period: date,
+        finProjectId: s.fin_project_id,
+      });
+    }
+  }
+
+  return out.sort((a, b) => a.date.localeCompare(b.date) || (a.direction === "entrada" ? -1 : 1));
+}
+
+export type MonthFlow = {
+  month: string;
+  label: string;
+  isPast: boolean;
+  isCurrent: boolean;
+  inConfirmed: number; // entradas confirmadas (o reales, en el pasado)
+  outConfirmed: number; // salidas comprometidas (o reales)
+  inProbable: number; // ponderado
+  outProbable: number; // ponderado
+  net: number; // solo confirmado
+  netWithProbable: number;
+  // solo mes actual: ya llegado / ya pagado
+  inArrived: number;
+  outPaid: number;
+};
+
+/** Meses del gráfico: `back` meses reales, el actual y `ahead - 1` siguientes. */
+export function monthlyFlows(input: ForecastInput, back = 4, ahead = 6, today = todayISO()) {
+  const { fx, invoices, payments } = input;
+  const cur = today.slice(0, 7);
+  const last = addMonths(cur, ahead - 1);
+  const moves = forecastMovements(input, last, today);
+  const cobradas = (m: string) => invoices.filter((f) => f.status === "cobrada" && f.date.slice(0, 7) === m).reduce((s, f) => s + f.eur, 0);
+  const pagados = (m: string) => payments.filter((p) => p.date.slice(0, 7) === m).reduce((s, p) => s + amountEur(p, fx), 0);
+
+  const rows: MonthFlow[] = [];
+  for (let k = -back; k < ahead; k++) {
+    const m = addMonths(cur, k);
+    const isPast = m < cur;
+    const isCurrent = m === cur;
+    // En el mes actual entra también lo vencido
+    const inMonth = moves.filter((x) => (isCurrent ? x.date.slice(0, 7) <= m : x.date.slice(0, 7) === m));
+    const conf = (dir: Movement["direction"]) => inMonth.filter((x) => x.direction === dir && !x.probable).reduce((s, x) => s + x.eur, 0);
+    const prob = (dir: Movement["direction"]) =>
+      inMonth.filter((x) => x.direction === dir && x.probable).reduce((s, x) => s + (x.eur * x.probability) / 100, 0);
+    let inC: number, outC: number, inP = 0, outP = 0, arrived = 0, paid = 0;
+    if (isPast) {
+      inC = cobradas(m);
+      outC = pagados(m);
+    } else {
+      arrived = isCurrent ? cobradas(m) : 0;
+      paid = isCurrent ? pagados(m) : 0;
+      inC = arrived + conf("entrada");
+      outC = paid + conf("salida");
+      inP = prob("entrada");
+      outP = prob("salida");
+    }
+    rows.push({
+      month: m,
+      label: monthLabel(m),
+      isPast,
+      isCurrent,
+      inConfirmed: inC,
+      outConfirmed: outC,
+      inProbable: inP,
+      outProbable: outP,
+      net: inC - outC,
+      netWithProbable: inC - outC + inP - outP,
+      inArrived: arrived,
+      outPaid: paid,
+    });
+  }
+  return rows;
+}
+
+/** Mensualidades "por activar": se avisan aparte, nunca en lo confirmado. */
+export function pendingActivations(projects: FinProject[], recs: FinRecurrence[]) {
+  return recs
+    .filter((r) => r.status === "por_activar")
+    .map((r) => ({ recurrence: r, name: projects.find((p) => p.id === r.fin_project_id)?.name || "", eur: r.client_eur_month }));
 }
