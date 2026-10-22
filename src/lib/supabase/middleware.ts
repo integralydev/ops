@@ -32,6 +32,8 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
+    // Webhooks: sin sesión; se protegen con su firma (ver api/stripe/webhook)
+    path.startsWith("/api/stripe/") ||
     path.startsWith("/_next") ||
     path.startsWith("/favicon");
 

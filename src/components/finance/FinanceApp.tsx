@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { FlowChart } from "./FlowChart";
-import { UpcomingMonths } from "./UpcomingMonths";
-import { InvoiceModal, PaymentModal, ProjectModal, ReceivableModal, ScheduledModal } from "./forms";
+import { MonthDetail, UpcomingMonths } from "./UpcomingMonths";
+import { InvoiceModal, PaymentModal, ProjectModal, ReceivableModal, ScheduledModal, SkipModal, StripePendingRow } from "./forms";
 import {
   amountEur,
   computeKpis,
@@ -25,12 +25,14 @@ import {
   parseReceivable,
   parseRecurrence,
   parseScheduled,
+  parseStripePending,
   pctS,
   pendingActivations,
   projectMargin,
   recurrenceMargin,
   recurrencesOf,
   sortInvoices,
+  staleScheduled,
   todayISO,
   usd0,
   type FinInvoice,
@@ -39,6 +41,8 @@ import {
   type FinReceivable,
   type FinRecurrence,
   type FinScheduled,
+  type FinStripePending,
+  type StaleItem,
   type Movement,
 } from "@/lib/finance";
 
@@ -50,6 +54,7 @@ type Data = {
   receivables: FinReceivable[];
   scheduled: FinScheduled[];
   payments: FinPayment[];
+  stripePending: FinStripePending[];
 };
 
 type InvoiceEdit = { invoice?: FinInvoice; prefill?: Partial<FinInvoice>; closeScheduledId?: string };
@@ -64,7 +69,12 @@ const KIND_LABEL: Record<FinPayment["kind"], string> = {
   infra: "Infra",
   otro: "Otro",
 };
-const FREQ_LABEL: Record<FinScheduled["frequency"], string> = { unica: "Única", mensual: "Mensual", trimestral: "Trimestral" };
+const FREQ_LABEL: Record<FinScheduled["frequency"], string> = {
+  unica: "Única",
+  mensual: "Mensual",
+  trimestral: "Trimestral",
+  anual: "Anual",
+};
 
 // Finanzas (solo propietarios, sesión aal2): primero lo que viene (este mes,
 // línea del tiempo y próximos 60 días) y debajo, plegado, el detalle de la
@@ -79,10 +89,13 @@ export function FinanceApp() {
   const [editRecv, setEditRecv] = useState<FinReceivable | "new" | null>(null);
   const [editScheduled, setEditScheduled] = useState<FinScheduled | "new" | null>(null);
   const [editPayment, setEditPayment] = useState<PaymentEdit | null>(null);
+  const [skipItem, setSkipItem] = useState<StaleItem | null>(null);
+  const [detailMonth, setDetailMonth] = useState<string | null>(null);
+  const [allStale, setAllStale] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [s, p, r, i, c, sc, po] = await Promise.all([
+    const [s, p, r, i, c, sc, po, sp] = await Promise.all([
       supabase.from("fin_settings").select("fx_usd_eur").eq("id", 1).maybeSingle(),
       supabase.from("fin_projects").select("*").order("position").order("created_at"),
       supabase.from("fin_recurrences").select("*"),
@@ -90,8 +103,9 @@ export function FinanceApp() {
       supabase.from("fin_receivables").select("*").order("position").order("created_at"),
       supabase.from("fin_scheduled").select("*").order("date"),
       supabase.from("fin_payments_out").select("*").order("date", { ascending: false }),
+      supabase.from("fin_stripe_pending").select("*").order("paid_date"),
     ]);
-    const err = [s, p, r, i, c, sc, po].find((x) => x.error)?.error;
+    const err = [s, p, r, i, c, sc, po, sp].find((x) => x.error)?.error;
     if (err) {
       setError(err.message);
       return;
@@ -105,6 +119,7 @@ export function FinanceApp() {
       receivables: (c.data || []).map(parseReceivable),
       scheduled: (sc.data || []).map(parseScheduled),
       payments: (po.data || []).map(parsePayment),
+      stripePending: (sp.data || []).map(parseStripePending),
     });
   }, []);
 
@@ -129,7 +144,7 @@ export function FinanceApp() {
     );
   }
 
-  const { fx, projects, recs, invoices, receivables, scheduled, payments } = data;
+  const { fx, projects, recs, invoices, receivables, scheduled, payments, stripePending } = data;
   const today = todayISO();
   const curMonth = today.slice(0, 7);
   const k = computeKpis(projects, recs);
@@ -137,6 +152,11 @@ export function FinanceApp() {
   const flows = monthlyFlows(data, 4, 6, today);
   const now = flows.find((f) => f.isCurrent)!;
   const cards = monthCards(data, 60, today);
+  const nextCards = cards.filter((c) => !c.isCurrent);
+  const detailCard = cards.find((c) => c.month === detailMonth);
+  const stale = staleScheduled(data, today);
+  const staleConfirmed = stale.filter((x) => !x.probable);
+  const staleProbable = stale.filter((x) => x.probable);
   const activations = pendingActivations(projects, recs);
   const periods = computePeriods(invoices, fx, payments);
   const shownPeriods = allMonths ? periods : periods.slice(-6);
@@ -167,13 +187,34 @@ export function FinanceApp() {
     });
   }
 
+  // Una cuota de programado como movimiento (para "Pagado" / "Facturado")
+  const staleMove = (x: StaleItem): Movement => ({
+    key: x.key,
+    date: x.period,
+    direction: x.scheduled.direction,
+    concept: x.scheduled.concept,
+    counterparty: x.scheduled.counterparty || projName(x.scheduled.fin_project_id),
+    eur: x.eur,
+    usd: x.scheduled.amount_usd,
+    probable: x.probable,
+    probability: x.scheduled.probability ?? 100,
+    overdue: true,
+    source: "programado",
+    scheduledId: x.scheduled.id,
+    period: x.period,
+    finProjectId: x.scheduled.fin_project_id,
+    kind: x.scheduled.kind,
+    frequency: x.scheduled.frequency,
+  });
+
   function markInvoiced(m: Movement) {
     const s = m.scheduledId ? schedById.get(m.scheduledId) : undefined;
     setEditInvoice({
       prefill: {
         client: m.counterparty,
         concept: m.concept,
-        date: m.date < today ? today : m.date,
+        // Mensualidad con días de pago: la factura lleva la fecha de cobro
+        date: (m.billedOn || m.date) < today ? today : m.billedOn || m.date,
         eur: m.eur,
         usd: m.usd ?? null,
         kind: m.source === "mensualidad" ? "mensualidad" : "implementacion",
@@ -202,10 +243,91 @@ export function FinanceApp() {
           </div>
         )}
 
+        {/* Lo que pide atención */}
+        {stripePending.length > 0 && (
+          <div className="fin-attn">
+            <b>💳 {stripePending.length === 1 ? "1 cobro de Stripe sin vincular" : `${stripePending.length} cobros de Stripe sin vincular`}</b>
+            <span className="muted"> · el customer no está en ninguna mensualidad; vincúlalo y los siguientes entran solos</span>
+            {stripePending.map((x) => (
+              <StripePendingRow key={x.id} item={x} projects={projects} recs={recs} fx={fx} onSaved={load} />
+            ))}
+          </div>
+        )}
+        {stale.length > 0 && (
+          <div className="fin-attn">
+            {staleConfirmed.length > 0 && (
+              <>
+                <b>
+                  ⏳ {staleConfirmed.length === 1 ? "1 movimiento sin confirmar" : `${staleConfirmed.length} movimientos sin confirmar`}
+                </b>
+                <span className="muted"> · programados con fecha pasada sin pago hecho</span>
+                {(allStale ? staleConfirmed : staleConfirmed.slice(0, 3)).map((x) => (
+                  <div key={x.key} className="fin-attn-row">
+                    <span className="fin-move-date">{fFecha(x.period)}</span>
+                    <span>
+                      {x.scheduled.concept}
+                      {x.scheduled.counterparty && <span className="muted"> · {x.scheduled.counterparty}</span>}
+                    </span>
+                    <span className={"fin-move-amount " + (x.scheduled.direction === "entrada" ? "fin-in" : "fin-out")}>
+                      {x.scheduled.direction === "entrada" ? "+" : "−"}
+                      {x.scheduled.amount_usd != null ? usd0(x.scheduled.amount_usd) : eur0(x.eur)}
+                    </span>
+                    <span className="fin-attn-acts">
+                      {x.scheduled.direction === "salida" ? (
+                        <button className="btn btn-sm" onClick={() => markPaid(staleMove(x))}>
+                          Pagado
+                        </button>
+                      ) : (
+                        <button className="btn btn-sm" onClick={() => markInvoiced(staleMove(x))}>
+                          Facturado
+                        </button>
+                      )}
+                      <button className="btn btn-sm" onClick={() => setSkipItem(x)}>
+                        No se {x.scheduled.direction === "salida" ? "pagó" : "cobró"} / mover fecha
+                      </button>
+                    </span>
+                  </div>
+                ))}
+                {staleConfirmed.length > 3 && (
+                  <button className="fin-attn-more" onClick={() => setAllStale(!allStale)}>
+                    {allStale ? "Ver menos" : `Ver los ${staleConfirmed.length}`}
+                  </button>
+                )}
+              </>
+            )}
+            {staleProbable.length > 0 && (
+              <div style={{ marginTop: staleConfirmed.length ? 12 : 0 }}>
+                <b>🤔 Probables con fecha pasada</b>
+                <span className="muted"> · actualizar o descartar</span>
+                {staleProbable.map((x) => (
+                  <div key={x.key} className="fin-attn-row is-probable">
+                    <span className="fin-move-date">{fFecha(x.period)}</span>
+                    <span>
+                      {x.scheduled.concept} <span className="fin-tag">{x.scheduled.probability ?? 50}%</span>
+                    </span>
+                    <span className="fin-move-amount">{eur0(x.eur)}</span>
+                    <span className="fin-attn-acts">
+                      <button className="btn btn-sm" onClick={() => setEditScheduled(x.scheduled)}>
+                        Actualizar
+                      </button>
+                      <button className="btn btn-sm" onClick={() => setSkipItem(x)}>
+                        Descartar
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Este mes */}
         <div className="fin-head" style={{ marginTop: 0 }}>
           <div className="section-title">Este mes · {monthLabel(curMonth)}</div>
           <div className="fin-actions">
+            <button className="btn btn-sm" onClick={() => setDetailMonth(curMonth)}>
+              Ver detalle
+            </button>
             <button className="btn btn-sm" onClick={() => setEditScheduled("new")}>
               + Programado
             </button>
@@ -284,23 +406,7 @@ export function FinanceApp() {
         <div className="fin-head">
           <div className="section-title">Próximos 60 días</div>
         </div>
-        <UpcomingMonths
-          cards={cards}
-          showProbable={showProbable}
-          actions={{
-            markPaid,
-            markInvoiced,
-            openInvoice: (id) => {
-              const f = invoices.find((x) => x.id === id);
-              if (f) setEditInvoice({ invoice: f });
-            },
-            openPayment: (p) => setEditPayment({ payment: p }),
-            openScheduled: (id) => {
-              const sc = schedById.get(id);
-              if (sc) setEditScheduled(sc);
-            },
-          }}
-        />
+        <UpcomingMonths cards={nextCards} showProbable={showProbable} onOpen={setDetailMonth} />
 
         {/* Detalle, plegado */}
         <details className="fin-sec">
@@ -576,6 +682,26 @@ export function FinanceApp() {
         </details>
       </div>
 
+      {detailCard && (
+        <MonthDetail
+          card={detailCard}
+          showProbable={showProbable}
+          onClose={() => setDetailMonth(null)}
+          actions={{
+            markPaid,
+            markInvoiced,
+            openInvoice: (id) => {
+              const f = invoices.find((x) => x.id === id);
+              if (f) setEditInvoice({ invoice: f });
+            },
+            openPayment: (p) => setEditPayment({ payment: p }),
+            openScheduled: (id) => {
+              const sc = schedById.get(id);
+              if (sc) setEditScheduled(sc);
+            },
+          }}
+        />
+      )}
       {editProject && (
         <ProjectModal
           project={editProject === "new" ? undefined : editProject}
@@ -601,6 +727,7 @@ export function FinanceApp() {
       {editPayment && (
         <PaymentModal {...editPayment} finProjects={projects} onClose={() => setEditPayment(null)} onSaved={load} />
       )}
+      {skipItem && <SkipModal item={skipItem} onClose={() => setSkipItem(null)} onSaved={load} />}
     </>
   );
 }

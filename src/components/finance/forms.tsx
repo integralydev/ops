@@ -6,7 +6,18 @@ import { useAppData } from "@/components/app-data";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { useProjects } from "@/lib/hooks/useProjects";
-import type { FinInvoice, FinPayment, FinProject, FinReceivable, FinRecurrence, FinScheduled } from "@/lib/finance";
+import {
+  eur0,
+  fFecha,
+  type FinInvoice,
+  type FinPayment,
+  type FinProject,
+  type FinReceivable,
+  type FinRecurrence,
+  type FinScheduled,
+  type FinStripePending,
+  type StaleItem,
+} from "@/lib/finance";
 
 // Formularios de Finanzas (solo propietarios). Sencillos a propósito.
 
@@ -57,6 +68,8 @@ type RecDraft = {
   endMonth: string;
   billingDay: string;
   method: "" | "stripe" | "transferencia" | "otro";
+  terms: string;
+  stripeCustomer: string;
 };
 const recDraft = (r?: FinRecurrence): RecDraft => ({
   enabled: !!r,
@@ -70,6 +83,8 @@ const recDraft = (r?: FinRecurrence): RecDraft => ({
   endMonth: r?.end_month || "",
   billingDay: r?.billing_day ? String(r.billing_day) : "",
   method: r?.method || "",
+  terms: r?.payment_terms_days ? String(r.payment_terms_days) : "",
+  stripeCustomer: r?.stripe_customer_id || "",
 });
 
 export function ProjectModal({
@@ -165,6 +180,8 @@ export function ProjectModal({
             end_month: d.endMonth || null,
             billing_day: d.billingDay ? Math.min(31, Math.max(1, Number(d.billingDay))) : null,
             method: d.method || null,
+            payment_terms_days: Math.min(365, Math.max(0, Number(d.terms) || 0)),
+            stripe_customer_id: d.stripeCustomer.trim() || null,
           },
           { onConflict: "fin_project_id,slot" },
         );
@@ -239,10 +256,22 @@ export function ProjectModal({
               <input type="month" className="com-input" value={d.endMonth} onChange={(e) => set({ ...d, endMonth: e.target.value })} />
             </div>
           </div>
-          <div className="field">
-            <label>Día de cobro (opcional)</label>
-            <input type="number" min={1} max={31} value={d.billingDay} onChange={(e) => set({ ...d, billingDay: e.target.value })} placeholder="1-31" />
+          <div className="field-row">
+            <div className="field">
+              <label>Día de cobro (opcional)</label>
+              <input type="number" min={1} max={31} value={d.billingDay} onChange={(e) => set({ ...d, billingDay: e.target.value })} placeholder="1-31" />
+            </div>
+            <div className="field">
+              <label>Días de pago</label>
+              <input type="number" min={0} max={365} value={d.terms} onChange={(e) => set({ ...d, terms: e.target.value })} placeholder="0" />
+            </div>
           </div>
+          {d.method === "stripe" && (
+            <div className="field">
+              <label>Customer de Stripe (cus_…): sus cobros entran solos</label>
+              <input type="text" value={d.stripeCustomer} onChange={(e) => set({ ...d, stripeCustomer: e.target.value })} placeholder="cus_…" />
+            </div>
+          )}
           <div className="muted" style={{ fontSize: 11.8 }}>
             El coste dev e infra del tramo solo cuenta para la rentabilidad (margen medio). En la previsión, las salidas son los
             programados.
@@ -700,6 +729,7 @@ export function ScheduledModal({
             <option value="unica">Única</option>
             <option value="mensual">Mensual</option>
             <option value="trimestral">Trimestral</option>
+            <option value="anual">Anual</option>
           </select>
         </div>
         <div className="field">
@@ -863,5 +893,180 @@ export function PaymentModal({
         </button>
       )}
     </Modal>
+  );
+}
+
+// --- Lo que pide atención ------------------------------------------------------
+
+/** Cuota de un programado con fecha pasada: moverla a otra fecha o descartarla. */
+export function SkipModal({ item, onClose, onSaved }: { item: StaleItem; onClose: () => void; onSaved: () => void }) {
+  const sc = item.scheduled;
+  const [mode, setMode] = useState<"mover" | "descartar">(item.probable ? "descartar" : "mover");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (mode === "mover" && !date) {
+      toast("Pon la fecha nueva");
+      return;
+    }
+    setSaving(true);
+    const supabase = createClient();
+    let error;
+    if (sc.frequency === "unica") {
+      ({ error } = await supabase
+        .from("fin_scheduled")
+        .update(mode === "mover" ? { date } : { closed: true })
+        .eq("id", sc.id));
+    } else {
+      // Recurrente: se salta esta cuota y, si se mueve, queda como única en la fecha nueva
+      ({ error } = await supabase
+        .from("fin_scheduled")
+        .update({ skipped: [...sc.skipped, item.period] })
+        .eq("id", sc.id));
+      if (!error && mode === "mover") {
+        ({ error } = await supabase.from("fin_scheduled").insert({
+          direction: sc.direction,
+          concept: sc.concept,
+          counterparty: sc.counterparty,
+          fin_project_id: sc.fin_project_id,
+          amount_eur: sc.amount_eur,
+          amount_usd: sc.amount_usd,
+          frequency: "unica",
+          date,
+          certainty: sc.certainty,
+          probability: sc.probability,
+          note: `Movido desde ${fFecha(item.period)}`,
+          kind: sc.kind,
+        }));
+      }
+    }
+    setSaving(false);
+    if (error) {
+      toast("No se pudo guardar: " + error.message);
+      return;
+    }
+    toast(mode === "mover" ? "Fecha cambiada" : "Descartado");
+    onSaved();
+    onClose();
+  }
+
+  const salida = sc.direction === "salida";
+  return (
+    <Modal title={item.probable ? "Probable con fecha pasada" : `No se ${salida ? "pagó" : "cobró"}`} onClose={onClose} onSave={save} saving={saving}>
+      <p style={{ marginTop: 0, fontSize: 13.5 }}>
+        <b>{sc.concept}</b> · {eur0(item.eur)} · previsto el {fFecha(item.period)}
+        {sc.frequency !== "unica" && <span className="muted"> (solo esta cuota; las siguientes siguen igual)</span>}
+      </p>
+      <label className="links-check" style={{ marginBottom: 8 }}>
+        <input type="radio" checked={mode === "mover"} onChange={() => setMode("mover")} />
+        <span>Moverlo a otra fecha</span>
+      </label>
+      {mode === "mover" && (
+        <div className="field" style={{ marginLeft: 24 }}>
+          <input type="date" className="com-input" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      )}
+      <label className="links-check">
+        <input type="radio" checked={mode === "descartar"} onChange={() => setMode("descartar")} />
+        <span>{item.probable ? "Descartarlo" : `No se ${salida ? "pagará" : "cobrará"}: descartarlo`}</span>
+      </label>
+    </Modal>
+  );
+}
+
+/** Cobro de Stripe de un customer sin vincular: se vincula a un proyecto y se crea la factura. */
+export function StripePendingRow({
+  item,
+  projects,
+  recs,
+  fx,
+  onSaved,
+}: {
+  item: FinStripePending;
+  projects: FinProject[];
+  recs: FinRecurrence[];
+  fx: number;
+  onSaved: () => void;
+}) {
+  const withRecs = projects.filter((p) => recs.some((r) => r.fin_project_id === p.id && r.status !== "cancelada"));
+  const [projectId, setProjectId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function link() {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) {
+      toast("Elige el proyecto");
+      return;
+    }
+    setBusy(true);
+    const supabase = createClient();
+    // 1) El customer queda en las mensualidades del proyecto (los siguientes cobros entran solos)
+    let { error } = await supabase
+      .from("fin_recurrences")
+      .update({ stripe_customer_id: item.customer_id })
+      .eq("fin_project_id", project.id)
+      .neq("status", "cancelada");
+    // 2) Este cobro (y otros pendientes del mismo customer) pasan a facturas cobradas
+    if (!error) {
+      const { data: rows } = await supabase.from("fin_stripe_pending").select("*").eq("customer_id", item.customer_id);
+      for (const x of (rows || [item]) as FinStripePending[]) {
+        const amount = Number(x.amount);
+        const usd = x.currency === "usd";
+        ({ error } = await supabase.from("fin_invoices").insert({
+          number: x.number,
+          client: project.name,
+          concept: x.concept,
+          date: x.paid_date,
+          eur: usd ? Math.round(amount * fx * 100) / 100 : amount,
+          usd: usd ? amount : null,
+          kind: "mensualidad",
+          status: "cobrada",
+          fin_project_id: project.id,
+          stripe_invoice_id: x.stripe_invoice_id,
+        }));
+        if (error) break;
+        await supabase.from("fin_stripe_pending").delete().eq("id", x.id);
+      }
+    }
+    setBusy(false);
+    if (error) {
+      toast("No se pudo vincular: " + error.message);
+      return;
+    }
+    toast(`Vinculado a ${project.name}`);
+    onSaved();
+  }
+
+  async function discard() {
+    if (await del("fin_stripe_pending", item.id, "este cobro de Stripe (no se creará factura)")) onSaved();
+  }
+
+  return (
+    <div className="fin-attn-row">
+      <span className="fin-move-date">{fFecha(item.paid_date)}</span>
+      <span>
+        {item.customer_name || item.customer_id} <span className="muted">· {item.number} · {item.concept}</span>
+      </span>
+      <span className="fin-move-amount fin-in">
+        +{item.currency === "usd" ? `$${item.amount}` : eur0(item.amount)}
+      </span>
+      <span className="fin-attn-acts">
+        <select className="com-input fin-attn-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+          <option value="">Vincular a…</option>
+          {withRecs.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-sm" onClick={link} disabled={busy || !projectId}>
+          Vincular
+        </button>
+        <button className="btn btn-sm" onClick={discard} disabled={busy}>
+          Descartar
+        </button>
+      </span>
+    </div>
   );
 }

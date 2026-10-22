@@ -41,6 +41,10 @@ export type FinRecurrence = {
   billing_day?: number | null;
   method?: "stripe" | "transferencia" | "otro" | null;
   status?: RecurrenceStatus;
+  /** Customer de Stripe: los cobros (invoice.paid) se vinculan solos. */
+  stripe_customer_id?: string | null;
+  /** Días de pago: la entrada se espera en el día de cobro + estos días. */
+  payment_terms_days?: number;
 };
 
 export type OutKind = "dev" | "comision" | "comercial" | "gasto_fijo" | "infra" | "otro";
@@ -53,7 +57,7 @@ export type FinScheduled = {
   fin_project_id: string | null;
   amount_eur: number | null;
   amount_usd: number | null;
-  frequency: "unica" | "mensual" | "trimestral";
+  frequency: "unica" | "mensual" | "trimestral" | "anual";
   date: string;
   end_date: string | null;
   certainty: "confirmado" | "probable";
@@ -61,6 +65,8 @@ export type FinScheduled = {
   note: string;
   closed: boolean;
   kind: OutKind;
+  /** Cuotas (fechas) que no se pagaron o se movieron: fuera de la previsión. */
+  skipped: string[];
 };
 
 export type FinPayment = {
@@ -92,6 +98,19 @@ export type FinInvoice = {
   fin_project_id?: string | null;
   scheduled_id?: string | null;
   scheduled_period?: string | null;
+  stripe_invoice_id?: string | null;
+};
+
+export type FinStripePending = {
+  id: string;
+  stripe_invoice_id: string;
+  customer_id: string;
+  customer_name: string;
+  number: string;
+  concept: string;
+  amount: number;
+  currency: string;
+  paid_date: string;
 };
 
 export type FinReceivable = {
@@ -125,6 +144,7 @@ export function parseRecurrence(r: Record<string, unknown>): FinRecurrence {
     dev_usd_month: num(r.dev_usd_month),
     infra_eur_month: num(r.infra_eur_month),
     status: rec.status || (rec.active ? "activa" : "por_activar"),
+    payment_terms_days: num(r.payment_terms_days),
   };
 }
 export function parseScheduled(r: Record<string, unknown>): FinScheduled {
@@ -134,7 +154,11 @@ export function parseScheduled(r: Record<string, unknown>): FinScheduled {
     amount_usd: numOrNull(r.amount_usd),
     probability: numOrNull(r.probability),
     kind: (r.kind as OutKind) || "otro",
+    skipped: (r.skipped as string[]) || [],
   };
+}
+export function parseStripePending(r: Record<string, unknown>): FinStripePending {
+  return { ...(r as unknown as FinStripePending), amount: num(r.amount) };
 }
 export function parsePayment(r: Record<string, unknown>): FinPayment {
   return { ...(r as unknown as FinPayment), amount_eur: numOrNull(r.amount_eur), amount_usd: numOrNull(r.amount_usd) };
@@ -364,6 +388,8 @@ export type Movement = {
   recurrenceId?: string;
   finProjectId?: string | null;
   kind?: OutKind; // programados
+  /** Mensualidades: fecha de cobro (la prevista lleva sumados los días de pago). */
+  billedOn?: string;
   frequency?: FinScheduled["frequency"];
 };
 
@@ -379,6 +405,23 @@ const lastDay = (month: string) => {
 };
 /** Fecha del día `day` de un mes, sin pasarse del último día. */
 const dayIn = (month: string, day: number) => `${month}-${pad(Math.min(day, lastDay(month)))}`;
+/** Fecha ISO + n días. */
+export const addDays = (iso: string, n: number) => {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return todayISO(d);
+};
+/**
+ * Fecha de cobro + días de pago. Cada 30 días cuentan como un mes natural
+ * (a 30 días, lo facturado el 1 de octubre se espera el 1 de noviembre).
+ */
+export const addTerms = (iso: string, days: number) => {
+  const months = Math.floor(days / 30);
+  if (!months) return addDays(iso, days);
+  const [y, m, d] = iso.split("-").map(Number);
+  const month = addMonths(`${y}-${pad(m)}`, months);
+  return addDays(dayIn(month, d), days % 30);
+};
 export const todayISO = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 /** Cuotas de un programado entre dos meses (incluidos). */
@@ -387,12 +430,12 @@ export function occurrences(s: FinScheduled, fromMonth: string, toMonth: string)
   const startMonth = s.date.slice(0, 7);
   const day = Number(s.date.slice(8, 10));
   if (s.frequency === "unica") return startMonth >= fromMonth && startMonth <= toMonth ? [s.date] : [];
-  const step = s.frequency === "trimestral" ? 3 : 1;
+  const step = s.frequency === "anual" ? 12 : s.frequency === "trimestral" ? 3 : 1;
   const out: string[] = [];
   for (let k = 0, m = startMonth; m <= toMonth && k < 600; k++, m = addMonths(startMonth, k * step)) {
     const date = dayIn(m, day);
     if (s.end_date && date > s.end_date) break;
-    if (m >= fromMonth) out.push(date);
+    if (m >= fromMonth && !s.skipped?.includes(date)) out.push(date);
   }
   return out;
 }
@@ -421,13 +464,19 @@ export function forecastMovements(input: ForecastInput, toMonth: string, today =
   payments.forEach((p) => p.scheduled_id && p.period && done.add(`${p.scheduled_id}|${p.period}`));
   invoices.forEach((f) => f.scheduled_id && f.scheduled_period && done.add(`${f.scheduled_id}|${f.scheduled_period}`));
 
-  // 1) Facturas pendientes (o parciales): en su mes; las de meses pasados, vencidas
+  // Días de pago del proyecto (los del tramo con más días)
+  const terms = (projectId?: string | null) =>
+    Math.max(0, ...recs.filter((r) => r.fin_project_id === projectId).map((r) => r.payment_terms_days || 0));
+
+  // 1) Facturas pendientes (o parciales): cuando se espera el dinero (las de
+  //    mensualidad, con los días de pago); de meses pasados, vencidas
   for (const f of invoices) {
     if (f.status !== "pendiente" && f.status !== "parcial") continue;
-    if (f.date.slice(0, 7) > toMonth) continue;
+    const expected = f.kind === "mensualidad" ? addTerms(f.date, terms(f.fin_project_id)) : f.date;
+    if (expected.slice(0, 7) > toMonth) continue;
     out.push({
       key: `inv-${f.id}`,
-      date: f.date,
+      date: expected,
       direction: "entrada",
       concept: f.concept || `Factura ${f.number}`,
       counterparty: f.client,
@@ -435,7 +484,7 @@ export function forecastMovements(input: ForecastInput, toMonth: string, today =
       usd: f.usd,
       probable: false,
       probability: 100,
-      overdue: f.date.slice(0, 7) < cur,
+      overdue: expected.slice(0, 7) < cur,
       source: "factura",
       invoiceId: f.id,
       finProjectId: f.fin_project_id ?? null,
@@ -449,12 +498,18 @@ export function forecastMovements(input: ForecastInput, toMonth: string, today =
   );
   for (const r of recs) {
     if (r.status !== "activa") continue;
-    for (let m = cur; m <= toMonth; m = addMonths(m, 1)) {
+    const days = r.payment_terms_days || 0;
+    // Con días de pago, lo cobrado en meses anteriores puede llegar este mes
+    for (let m = addMonths(cur, -Math.ceil(days / 28)); m <= toMonth; m = addMonths(m, 1)) {
       if (!inCalendar(r, m)) continue;
       if (billedMonths.has(`${r.fin_project_id}|${m}`)) continue;
+      const billedOn = dayIn(m, r.billing_day || 1);
+      const date = addTerms(billedOn, days);
+      if (date.slice(0, 7) < cur || date.slice(0, 7) > toMonth) continue;
       out.push({
         key: `rec-${r.id}-${m}`,
-        date: dayIn(m, r.billing_day || 1),
+        billedOn,
+        date,
         direction: "entrada",
         concept: `Mensualidad${r.title ? ` · ${r.title}` : ""}`,
         counterparty: projName(r.fin_project_id),
@@ -620,7 +675,14 @@ export type MonthCard = {
   net: number;
   /** ¿Queda algo por cobrar o pagar (o algo probable)? */
   pending: boolean;
+  /** Lo que no es habitual (la tarjeta enseña como mucho 3). */
+  alerts: CardAlert[];
 };
+
+export type CardAlert = { key: string; tone: "danger" | "warn" | "info" | "probable"; text: string };
+
+/** Pago único a partir del cual se avisa en la tarjeta del mes. */
+export const BIG_ONE_OFF_EUR = 300;
 
 const sumEur = (ls: CardLine[]) => ls.reduce((s, l) => s + l.eur, 0);
 const byDate = (a: CardLine, b: CardLine) => a.date.localeCompare(b.date);
@@ -689,15 +751,16 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
       ...ofMonth.filter((x) => x.direction === "entrada" && !x.probable && !isMens(x)).map(fromMove),
     ].sort(byDate);
 
-    // Salidas: únicas fila a fila; el resto, por tipo
+    // Salidas: únicas y anuales fila a fila; el resto, por tipo
+    const oneOff = (f?: FinScheduled["frequency"]) => f === "unica" || f === "anual";
     const out: { line: CardLine; single: boolean; group: OutGroup }[] = [
       ...pagos.map((p) => {
         const s = p.scheduled_id ? sched.get(p.scheduled_id) : undefined;
-        return { line: fromPayment(p), single: !s || s.frequency === "unica", group: groupOf(p.kind) };
+        return { line: fromPayment(p), single: !s || oneOff(s.frequency), group: groupOf(p.kind) };
       }),
       ...ofMonth
         .filter((x) => x.direction === "salida" && !x.probable)
-        .map((x) => ({ line: fromMove(x), single: x.frequency === "unica", group: groupOf(x.kind) })),
+        .map((x) => ({ line: fromMove(x), single: oneOff(x.frequency), group: groupOf(x.kind) })),
     ];
     const singleOut = out.filter((o) => o.single).map((o) => o.line).sort(byDate);
     const groups = OUT_GROUPS.map((g) => {
@@ -709,6 +772,31 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
     const inTotal = sumEur(mensualidades) + sumEur(otherIn);
     const outTotal = sumEur(singleOut) + groups.reduce((s, g) => s + g.total, 0);
     const all = [...mensualidades, ...otherIn, ...singleOut, ...groups.flatMap((g) => g.lines)];
+
+    // Avisos, por orden de importancia
+    const alerts: CardAlert[] = [];
+    all.filter((l) => l.overdue).forEach((l) =>
+      alerts.push({ key: `v-${l.key}`, tone: "danger", text: `Vencido: ${l.concept}${l.counterparty ? ` · ${l.counterparty}` : ""} · ${eur0(l.eur)}` }),
+    );
+    singleOut
+      .filter((l) => !l.done && l.eur >= BIG_ONE_OFF_EUR)
+      .forEach((l) =>
+        alerts.push({
+          key: `u-${l.key}`,
+          tone: "warn",
+          text: `Pago ${l.movement?.frequency === "anual" ? "anual" : "único"}: ${l.concept} · ${eur0(l.eur)}`,
+        }),
+      );
+    scheduled
+      .filter((sc) => !sc.closed && sc.frequency !== "unica" && sc.end_date?.slice(0, 7) === m)
+      .forEach((sc) => alerts.push({ key: `e-${sc.id}`, tone: "info", text: `Último mes: ${sc.concept}` }));
+    if (m === addMonths(cur, 1))
+      pendingActivations(input.projects, input.recs).forEach((a) =>
+        alerts.push({ key: `a-${a.recurrence.id}`, tone: "info", text: `Por activar: ${a.name} · +${eur0(a.eur)}/mes` }),
+      );
+    probable.forEach((l) =>
+      alerts.push({ key: `p-${l.key}`, tone: "probable", text: `Probable: ${l.concept} · ${eur0(l.eur)} · ${l.movement?.probability}%` }),
+    );
     cards.push({
       month: m,
       label: monthLabel(m),
@@ -723,8 +811,38 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
       probable,
       net: inTotal - outTotal,
       pending: all.some((l) => !l.done) || probable.length > 0,
+      alerts,
     });
   }
-  // El mes actual solo si aún le queda algo
-  return cards.filter((c) => !c.isCurrent || c.pending);
+  return cards;
+}
+
+// --- Lo que pide atención -----------------------------------------------------
+
+export type StaleItem = {
+  key: string;
+  scheduled: FinScheduled;
+  period: string; // fecha de la cuota
+  eur: number;
+  probable: boolean;
+};
+
+/**
+ * Programados con fecha pasada sin pago hecho (ni factura, si es entrada):
+ * los confirmados están "sin confirmar"; los probables, "fecha pasada:
+ * actualizar o descartar". Las cuotas saltadas o cerradas no salen.
+ */
+export function staleScheduled(input: ForecastInput, today = todayISO()) {
+  const { fx, scheduled, payments, invoices } = input;
+  const done = new Set<string>();
+  payments.forEach((p) => p.scheduled_id && p.period && done.add(`${p.scheduled_id}|${p.period}`));
+  invoices.forEach((f) => f.scheduled_id && f.scheduled_period && done.add(`${f.scheduled_id}|${f.scheduled_period}`));
+  const out: StaleItem[] = [];
+  for (const sc of scheduled) {
+    for (const period of occurrences(sc, sc.date.slice(0, 7), today.slice(0, 7))) {
+      if (period >= today || done.has(`${sc.id}|${period}`)) continue;
+      out.push({ key: `${sc.id}|${period}`, scheduled: sc, period, eur: amountEur(sc, fx), probable: sc.certainty === "probable" });
+    }
+  }
+  return out.sort((a, b) => a.period.localeCompare(b.period));
 }
