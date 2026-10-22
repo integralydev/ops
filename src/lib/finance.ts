@@ -43,6 +43,8 @@ export type FinRecurrence = {
   status?: RecurrenceStatus;
 };
 
+export type OutKind = "dev" | "comision" | "comercial" | "gasto_fijo" | "infra" | "otro";
+
 export type FinScheduled = {
   id: string;
   direction: "entrada" | "salida";
@@ -58,6 +60,7 @@ export type FinScheduled = {
   probability: number | null;
   note: string;
   closed: boolean;
+  kind: OutKind;
 };
 
 export type FinPayment = {
@@ -68,7 +71,7 @@ export type FinPayment = {
   amount_eur: number | null;
   amount_usd: number | null;
   fin_project_id: string | null;
-  kind: "dev" | "comision" | "comercial" | "gasto_fijo" | "otro";
+  kind: OutKind;
   scheduled_id: string | null;
   period: string | null;
 };
@@ -130,6 +133,7 @@ export function parseScheduled(r: Record<string, unknown>): FinScheduled {
     amount_eur: numOrNull(r.amount_eur),
     amount_usd: numOrNull(r.amount_usd),
     probability: numOrNull(r.probability),
+    kind: (r.kind as OutKind) || "otro",
   };
 }
 export function parsePayment(r: Record<string, unknown>): FinPayment {
@@ -359,6 +363,8 @@ export type Movement = {
   invoiceId?: string;
   recurrenceId?: string;
   finProjectId?: string | null;
+  kind?: OutKind; // programados
+  frequency?: FinScheduled["frequency"];
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -486,6 +492,8 @@ export function forecastMovements(input: ForecastInput, toMonth: string, today =
         scheduledId: s.id,
         period: date,
         finProjectId: s.fin_project_id,
+        kind: s.kind,
+        frequency: s.frequency,
       });
     }
   }
@@ -563,4 +571,160 @@ export function pendingActivations(projects: FinProject[], recs: FinRecurrence[]
   return recs
     .filter((r) => r.status === "por_activar")
     .map((r) => ({ recurrence: r, name: projects.find((p) => p.id === r.fin_project_id)?.name || "", eur: r.client_eur_month }));
+}
+
+// --- Próximos 60 días, por mes ----------------------------------------------
+// Una tarjeta por mes natural. Entra: las mensualidades juntas (una etiqueta
+// por cliente) y lo demás fila a fila. Sale: los pagos únicos fila a fila y el
+// resto agrupado por tipo. Lo probable, aparte. En el mes actual entran también
+// lo ya cobrado / pagado y lo vencido, así que su "queda" es el mismo que el
+// de "Este mes" y el de la línea del tiempo.
+
+export type OutGroup = "gasto_fijo" | "infra_dev" | "comercial" | "comision" | "otro";
+export const OUT_GROUPS: { id: OutGroup; label: string }[] = [
+  { id: "gasto_fijo", label: "Gastos fijos" },
+  { id: "infra_dev", label: "Infra y devs" },
+  { id: "comercial", label: "Comercial" },
+  { id: "comision", label: "Comisiones" },
+  { id: "otro", label: "Otros" },
+];
+const groupOf = (kind?: OutKind): OutGroup =>
+  kind === "dev" || kind === "infra" ? "infra_dev" : kind === "gasto_fijo" || kind === "comercial" || kind === "comision" ? kind : "otro";
+
+export type CardLine = {
+  key: string;
+  date: string;
+  concept: string;
+  counterparty: string;
+  eur: number;
+  usd?: number | null;
+  done: boolean; // ya cobrado / pagado
+  overdue: boolean;
+  movement?: Movement;
+  invoice?: FinInvoice;
+  payment?: FinPayment;
+};
+
+export type MonthCard = {
+  month: string;
+  label: string;
+  isCurrent: boolean;
+  mensualidades: CardLine[];
+  mensTotal: number;
+  otherIn: CardLine[];
+  inTotal: number;
+  singleOut: CardLine[];
+  groups: { id: OutGroup; label: string; lines: CardLine[]; total: number }[];
+  outTotal: number;
+  probable: CardLine[];
+  net: number;
+  /** ¿Queda algo por cobrar o pagar (o algo probable)? */
+  pending: boolean;
+};
+
+const sumEur = (ls: CardLine[]) => ls.reduce((s, l) => s + l.eur, 0);
+const byDate = (a: CardLine, b: CardLine) => a.date.localeCompare(b.date);
+
+/** Tarjetas desde el mes actual hasta el mes que contiene hoy + `days`. */
+export function monthCards(input: ForecastInput, days = 60, today = todayISO()) {
+  const { fx, invoices, payments, scheduled } = input;
+  const cur = today.slice(0, 7);
+  const end = new Date(`${today}T12:00:00`);
+  end.setDate(end.getDate() + days);
+  const lastMonth = todayISO(end).slice(0, 7);
+  const moves = forecastMovements(input, lastMonth, today);
+  const sched = new Map(scheduled.map((s) => [s.id, s]));
+
+  const fromMove = (m: Movement): CardLine => ({
+    key: m.key,
+    date: m.date,
+    concept: m.concept,
+    counterparty: m.counterparty,
+    eur: m.eur,
+    usd: m.usd,
+    done: false,
+    overdue: m.overdue,
+    movement: m,
+  });
+  const fromInvoice = (f: FinInvoice): CardLine => ({
+    key: `inv-${f.id}`,
+    date: f.date,
+    concept: f.concept || `Factura ${f.number}`,
+    counterparty: f.client,
+    eur: f.eur,
+    usd: f.usd,
+    done: true,
+    overdue: false,
+    invoice: f,
+  });
+  const fromPayment = (p: FinPayment): CardLine => ({
+    key: `pay-${p.id}`,
+    date: p.date,
+    concept: p.concept,
+    counterparty: p.counterparty,
+    eur: amountEur(p, fx),
+    usd: p.amount_usd,
+    done: true,
+    overdue: false,
+    payment: p,
+  });
+
+  const cards: MonthCard[] = [];
+  for (let m = cur; m <= lastMonth; m = addMonths(m, 1)) {
+    const isCurrent = m === cur;
+    const ofMonth = moves.filter((x) => (isCurrent ? x.date.slice(0, 7) <= m : x.date.slice(0, 7) === m));
+    const isMens = (x: Movement) =>
+      !x.overdue &&
+      (x.source === "mensualidad" ||
+        (x.source === "factura" && invoices.find((f) => f.id === x.invoiceId)?.kind === "mensualidad"));
+    const cobradas = invoices.filter((f) => f.status === "cobrada" && f.date.slice(0, 7) === m);
+    const pagos = payments.filter((p) => p.date.slice(0, 7) === m);
+
+    const mensualidades = [
+      ...cobradas.filter((f) => f.kind === "mensualidad").map(fromInvoice),
+      ...ofMonth.filter((x) => x.direction === "entrada" && !x.probable && isMens(x)).map(fromMove),
+    ].sort(byDate);
+    const otherIn = [
+      ...cobradas.filter((f) => f.kind !== "mensualidad").map(fromInvoice),
+      ...ofMonth.filter((x) => x.direction === "entrada" && !x.probable && !isMens(x)).map(fromMove),
+    ].sort(byDate);
+
+    // Salidas: únicas fila a fila; el resto, por tipo
+    const out: { line: CardLine; single: boolean; group: OutGroup }[] = [
+      ...pagos.map((p) => {
+        const s = p.scheduled_id ? sched.get(p.scheduled_id) : undefined;
+        return { line: fromPayment(p), single: !s || s.frequency === "unica", group: groupOf(p.kind) };
+      }),
+      ...ofMonth
+        .filter((x) => x.direction === "salida" && !x.probable)
+        .map((x) => ({ line: fromMove(x), single: x.frequency === "unica", group: groupOf(x.kind) })),
+    ];
+    const singleOut = out.filter((o) => o.single).map((o) => o.line).sort(byDate);
+    const groups = OUT_GROUPS.map((g) => {
+      const lines = out.filter((o) => !o.single && o.group === g.id).map((o) => o.line).sort(byDate);
+      return { ...g, lines, total: sumEur(lines) };
+    }).filter((g) => g.lines.length);
+
+    const probable = ofMonth.filter((x) => x.probable).map(fromMove).sort(byDate);
+    const inTotal = sumEur(mensualidades) + sumEur(otherIn);
+    const outTotal = sumEur(singleOut) + groups.reduce((s, g) => s + g.total, 0);
+    const all = [...mensualidades, ...otherIn, ...singleOut, ...groups.flatMap((g) => g.lines)];
+    cards.push({
+      month: m,
+      label: monthLabel(m),
+      isCurrent,
+      mensualidades,
+      mensTotal: sumEur(mensualidades),
+      otherIn,
+      inTotal,
+      singleOut,
+      groups,
+      outTotal,
+      probable,
+      net: inTotal - outTotal,
+      pending: all.some((l) => !l.done) || probable.length > 0,
+    });
+  }
+  // El mes actual solo si aún le queda algo
+  return cards.filter((c) => !c.isCurrent || c.pending);
 }

@@ -4,20 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { FlowChart } from "./FlowChart";
+import { UpcomingMonths } from "./UpcomingMonths";
 import { InvoiceModal, PaymentModal, ProjectModal, ReceivableModal, ScheduledModal } from "./forms";
 import {
-  addMonths,
   amountEur,
   computeKpis,
   computePeriods,
   currentRecurrence,
   eur0,
   fFecha,
-  forecastMovements,
   integrityCheck,
   invoiceAmount,
   marginTone,
   monthLabel,
+  monthCards,
   monthlyFlows,
   parseInvoice,
   parsePayment,
@@ -61,15 +61,10 @@ const KIND_LABEL: Record<FinPayment["kind"], string> = {
   comision: "Comisión",
   comercial: "Comercial",
   gasto_fijo: "Gasto fijo",
+  infra: "Infra",
   otro: "Otro",
 };
 const FREQ_LABEL: Record<FinScheduled["frequency"], string> = { unica: "Única", mensual: "Mensual", trimestral: "Trimestral" };
-
-const plusDays = (iso: string, n: number) => {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return todayISO(d);
-};
 
 // Finanzas (solo propietarios, sesión aal2): primero lo que viene (este mes,
 // línea del tiempo y próximos 60 días) y debajo, plegado, el detalle de la
@@ -141,8 +136,7 @@ export function FinanceApp() {
   const integrity = integrityCheck(projects, receivables);
   const flows = monthlyFlows(data, 4, 6, today);
   const now = flows.find((f) => f.isCurrent)!;
-  const limit = plusDays(today, 60);
-  const upcoming = forecastMovements(data, addMonths(curMonth, 2), today).filter((m) => m.date <= limit);
+  const cards = monthCards(data, 60, today);
   const activations = pendingActivations(projects, recs);
   const periods = computePeriods(invoices, fx, payments);
   const shownPeriods = allMonths ? periods : periods.slice(-6);
@@ -163,8 +157,11 @@ export function FinanceApp() {
         fin_project_id: m.finProjectId ?? null,
         scheduled_id: m.scheduledId,
         period: m.period,
-        // Tipo sugerido por el concepto; se puede cambiar en el formulario
-        kind: /\bdev\b/i.test(m.concept) ? "dev" : /comisi/i.test(m.concept) ? "comision" : /comercial/i.test(m.concept) ? "comercial" : "otro",
+        // El tipo del programado o, si no tiene, uno sugerido por el concepto
+        kind:
+          s && s.kind !== "otro"
+            ? s.kind
+            : /\bdev\b/i.test(m.concept) ? "dev" : /comisi/i.test(m.concept) ? "comision" : /comercial/i.test(m.concept) ? "comercial" : "otro",
       },
       closeScheduledId: s?.frequency === "unica" ? s.id : undefined,
     });
@@ -287,52 +284,23 @@ export function FinanceApp() {
         <div className="fin-head">
           <div className="section-title">Próximos 60 días</div>
         </div>
-        <div className="card">
-          {upcoming.length === 0 && <div className="empty" style={{ margin: 12 }}>Nada previsto en los próximos 60 días.</div>}
-          {upcoming.map((m) => {
-            const s = m.scheduledId ? schedById.get(m.scheduledId) : undefined;
-            const inv = m.invoiceId ? invoices.find((f) => f.id === m.invoiceId) : undefined;
-            return (
-              <div key={m.key} className={"fin-move" + (m.probable ? " is-probable" : "") + (m.overdue ? " is-overdue" : "")}>
-                <span className="fin-move-date">{fFecha(m.date)}</span>
-                <span className="fin-move-concept">
-                  <b>{m.concept || "—"}</b>
-                  {m.counterparty && <span className="muted"> · {m.counterparty}</span>}
-                  {m.overdue && <span className="fin-tag is-danger">vencido</span>}
-                  {m.probable && <span className="fin-tag">probable {m.probability}%</span>}
-                  {m.source === "mensualidad" && <span className="fin-tag">mensualidad</span>}
-                </span>
-                <span className={"fin-move-amount " + (m.direction === "entrada" ? "fin-in" : "fin-out")}>
-                  {m.direction === "entrada" ? "+" : "−"}
-                  {m.usd ? usd0(m.usd) : eur0(m.eur)}
-                  {m.usd ? <span className="muted"> ≈{eur0(m.eur)}</span> : null}
-                </span>
-                <span className="fin-move-actions">
-                  {m.source === "programado" && m.direction === "salida" && (
-                    <button className="btn btn-sm" onClick={() => markPaid(m)}>
-                      Marcar pagado
-                    </button>
-                  )}
-                  {m.direction === "entrada" && m.source !== "factura" && (
-                    <button className="btn btn-sm" onClick={() => markInvoiced(m)}>
-                      Facturado
-                    </button>
-                  )}
-                  {inv && (
-                    <button className="btn btn-sm" onClick={() => setEditInvoice({ invoice: inv })}>
-                      Ver
-                    </button>
-                  )}
-                  {s && (
-                    <button className="btn btn-sm" onClick={() => setEditScheduled(s)} title="Editar programado">
-                      ✎
-                    </button>
-                  )}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <UpcomingMonths
+          cards={cards}
+          showProbable={showProbable}
+          actions={{
+            markPaid,
+            markInvoiced,
+            openInvoice: (id) => {
+              const f = invoices.find((x) => x.id === id);
+              if (f) setEditInvoice({ invoice: f });
+            },
+            openPayment: (p) => setEditPayment({ payment: p }),
+            openScheduled: (id) => {
+              const sc = schedById.get(id);
+              if (sc) setEditScheduled(sc);
+            },
+          }}
+        />
 
         {/* Detalle, plegado */}
         <details className="fin-sec">
@@ -562,6 +530,7 @@ export function FinanceApp() {
                 <span className="fin-move-concept">
                   <b>{s.concept || "—"}</b>
                   {(s.counterparty || s.fin_project_id) && <span className="muted"> · {s.counterparty || projName(s.fin_project_id)}</span>}
+                  {s.direction === "salida" && <span className="fin-tag">{KIND_LABEL[s.kind]}</span>}
                   <span className="fin-tag">
                     {FREQ_LABEL[s.frequency]}
                     {s.end_date ? ` hasta ${fFecha(s.end_date)}` : ""}

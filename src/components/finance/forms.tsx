@@ -578,6 +578,7 @@ export function ScheduledModal({
   const [probability, setProbability] = useState(scheduled?.probability != null ? String(scheduled.probability) : "50");
   const [note, setNote] = useState(scheduled?.note || "");
   const [closed, setClosed] = useState(scheduled?.closed || false);
+  const [kind, setKind] = useState<FinScheduled["kind"]>(scheduled?.kind || "otro");
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -601,6 +602,7 @@ export function ScheduledModal({
       probability: certainty === "probable" ? Math.min(100, Math.max(0, Number(probability) || 0)) : null,
       note: note.trim(),
       closed,
+      kind: direction === "salida" ? kind : "otro",
     };
     const supabase = createClient();
     const { error } = scheduled
@@ -641,6 +643,19 @@ export function ScheduledModal({
           </select>
         </div>
       </div>
+      {direction === "salida" && (
+        <div className="field">
+          <label>Tipo de salida (para agruparla)</label>
+          <select value={kind} onChange={(e) => setKind(e.target.value as FinScheduled["kind"])}>
+            <option value="gasto_fijo">Gasto fijo</option>
+            <option value="infra">Infra</option>
+            <option value="dev">Dev</option>
+            <option value="comercial">Comercial</option>
+            <option value="comision">Comisión</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+      )}
       {certainty === "probable" && (
         <div className="field">
           <label>Probabilidad (%)</label>
@@ -806,6 +821,7 @@ export function PaymentModal({
             <option value="comision">Comisión</option>
             <option value="comercial">Comercial</option>
             <option value="gasto_fijo">Gasto fijo</option>
+            <option value="infra">Infra</option>
             <option value="otro">Otro</option>
           </select>
         </div>
