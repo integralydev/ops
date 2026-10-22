@@ -41,8 +41,10 @@ export type FinRecurrence = {
   billing_day?: number | null;
   method?: "stripe" | "transferencia" | "otro" | null;
   status?: RecurrenceStatus;
-  /** Customer de Stripe: los cobros (invoice.paid) se vinculan solos. */
+  /** Stripe: los cobros se vinculan solos por Payment Link, customer o email. */
+  stripe_payment_link?: string | null;
   stripe_customer_id?: string | null;
+  stripe_email?: string | null;
   /** Días de pago: la entrada se espera en el día de cobro + estos días. */
   payment_terms_days?: number;
 };
@@ -111,6 +113,8 @@ export type FinStripePending = {
   amount: number;
   currency: string;
   paid_date: string;
+  payment_link: string;
+  email: string;
 };
 
 export type FinReceivable = {

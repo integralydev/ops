@@ -247,7 +247,7 @@ export function FinanceApp() {
         {stripePending.length > 0 && (
           <div className="fin-attn">
             <b>💳 {stripePending.length === 1 ? "1 cobro de Stripe sin vincular" : `${stripePending.length} cobros de Stripe sin vincular`}</b>
-            <span className="muted"> · el customer no está en ninguna mensualidad; vincúlalo y los siguientes entran solos</span>
+            <span className="muted"> · no se sabe de qué cliente es; vincúlalo y los siguientes entran solos</span>
             {stripePending.map((x) => (
               <StripePendingRow key={x.id} item={x} projects={projects} recs={recs} fx={fx} onSaved={load} />
             ))}

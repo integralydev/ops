@@ -69,7 +69,9 @@ type RecDraft = {
   billingDay: string;
   method: "" | "stripe" | "transferencia" | "otro";
   terms: string;
+  stripeLink: string;
   stripeCustomer: string;
+  stripeEmail: string;
 };
 const recDraft = (r?: FinRecurrence): RecDraft => ({
   enabled: !!r,
@@ -84,7 +86,9 @@ const recDraft = (r?: FinRecurrence): RecDraft => ({
   billingDay: r?.billing_day ? String(r.billing_day) : "",
   method: r?.method || "",
   terms: r?.payment_terms_days ? String(r.payment_terms_days) : "",
+  stripeLink: r?.stripe_payment_link || "",
   stripeCustomer: r?.stripe_customer_id || "",
+  stripeEmail: r?.stripe_email || "",
 });
 
 export function ProjectModal({
@@ -181,7 +185,9 @@ export function ProjectModal({
             billing_day: d.billingDay ? Math.min(31, Math.max(1, Number(d.billingDay))) : null,
             method: d.method || null,
             payment_terms_days: Math.min(365, Math.max(0, Number(d.terms) || 0)),
+            stripe_payment_link: d.stripeLink.trim() || null,
             stripe_customer_id: d.stripeCustomer.trim() || null,
+            stripe_email: d.stripeEmail.trim() || null,
           },
           { onConflict: "fin_project_id,slot" },
         );
@@ -267,10 +273,25 @@ export function ProjectModal({
             </div>
           </div>
           {d.method === "stripe" && (
-            <div className="field">
-              <label>Customer de Stripe (cus_…): sus cobros entran solos</label>
-              <input type="text" value={d.stripeCustomer} onChange={(e) => set({ ...d, stripeCustomer: e.target.value })} placeholder="cus_…" />
-            </div>
+            <>
+              <div className="muted" style={{ fontSize: 11.8, margin: "2px 0 8px" }}>
+                Con cualquiera de estos tres, los cobros de Stripe entran solos (se prueba en este orden).
+              </div>
+              <div className="field">
+                <label>Payment Link (plink_…)</label>
+                <input type="text" value={d.stripeLink} onChange={(e) => set({ ...d, stripeLink: e.target.value })} placeholder="plink_…" />
+              </div>
+              <div className="field-row">
+                <div className="field">
+                  <label>Customer (cus_…)</label>
+                  <input type="text" value={d.stripeCustomer} onChange={(e) => set({ ...d, stripeCustomer: e.target.value })} placeholder="cus_…" />
+                </div>
+                <div className="field">
+                  <label>Email con el que paga</label>
+                  <input type="text" value={d.stripeEmail} onChange={(e) => set({ ...d, stripeEmail: e.target.value })} />
+                </div>
+              </div>
+            </>
           )}
           <div className="muted" style={{ fontSize: 11.8 }}>
             El coste dev e infra del tramo solo cuenta para la rentabilidad (margen medio). En la previsión, las salidas son los
@@ -1001,16 +1022,22 @@ export function StripePendingRow({
     }
     setBusy(true);
     const supabase = createClient();
-    // 1) El customer queda en las mensualidades del proyecto (los siguientes cobros entran solos)
-    let { error } = await supabase
-      .from("fin_recurrences")
-      .update({ stripe_customer_id: item.customer_id })
-      .eq("fin_project_id", project.id)
-      .neq("status", "cancelada");
-    // 2) Este cobro (y otros pendientes del mismo customer) pasan a facturas cobradas
+    // 1) Lo que identifica al cliente en Stripe queda en sus mensualidades: los siguientes cobros entran solos
+    const keys = {
+      ...(item.payment_link ? { stripe_payment_link: item.payment_link } : {}),
+      ...(item.customer_id ? { stripe_customer_id: item.customer_id } : {}),
+      ...(item.email ? { stripe_email: item.email } : {}),
+    };
+    let { error } = await supabase.from("fin_recurrences").update(keys).eq("fin_project_id", project.id).neq("status", "cancelada");
+    // 2) Este cobro (y otros pendientes del mismo cliente) pasan a facturas cobradas
     if (!error) {
-      const { data: rows } = await supabase.from("fin_stripe_pending").select("*").eq("customer_id", item.customer_id);
-      for (const x of (rows || [item]) as FinStripePending[]) {
+      const { data: rows } = await supabase.from("fin_stripe_pending").select("*");
+      const same = (x: FinStripePending) =>
+        x.id === item.id ||
+        (!!item.payment_link && x.payment_link === item.payment_link) ||
+        (!!item.customer_id && x.customer_id === item.customer_id) ||
+        (!!item.email && x.email.toLowerCase() === item.email.toLowerCase());
+      for (const x of ((rows || []) as FinStripePending[]).filter(same)) {
         const amount = Number(x.amount);
         const usd = x.currency === "usd";
         ({ error } = await supabase.from("fin_invoices").insert({
@@ -1046,7 +1073,11 @@ export function StripePendingRow({
     <div className="fin-attn-row">
       <span className="fin-move-date">{fFecha(item.paid_date)}</span>
       <span>
-        {item.customer_name || item.customer_id} <span className="muted">· {item.number} · {item.concept}</span>
+        {item.customer_name || item.email || item.customer_id || "Sin nombre"}{" "}
+        <span className="muted">
+          · {item.number} · {item.concept}
+          {item.payment_link ? " · por enlace de pago" : ""}
+        </span>
       </span>
       <span className="fin-move-amount fin-in">
         +{item.currency === "usd" ? `$${item.amount}` : eur0(item.amount)}

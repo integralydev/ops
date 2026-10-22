@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Webhook de Stripe (invoice.paid → factura cobrada en Finanzas).
+// Webhook de Stripe → factura cobrada en Finanzas. Eventos: invoice.paid
+// (suscripciones) y checkout.session.completed / async_payment_succeeded
+// (pagos únicos por Payment Link).
 // Este endpoint no guarda nada por sí mismo: pasa el cuerpo tal cual y la
 // cabecera de firma a fin_stripe_webhook, que verifica la firma de Stripe en la
 // base de datos (con el secreto de fin_secrets) y solo puede crear esa factura.
