@@ -9,13 +9,17 @@ import { useProjects } from "@/lib/hooks/useProjects";
 import {
   eur0,
   fFecha,
+  addMonths,
+  DEFAULT_PROBABILITY,
   type FinInvoice,
+  type FinOpportunity,
   type FinPayment,
   type FinProject,
   type FinReceivable,
   type FinRecurrence,
   type FinScheduled,
   type FinStripePending,
+  type OpportunityView,
   type StaleItem,
 } from "@/lib/finance";
 
@@ -63,7 +67,8 @@ type RecDraft = {
   devUsd: string;
   devTxt: string;
   infra: string;
-  status: "activa" | "por_activar" | "cancelada";
+  status: "activa" | "confirmada" | "por_activar" | "cancelada";
+  probability: string;
   startMonth: string;
   endMonth: string;
   billingDay: string;
@@ -81,6 +86,7 @@ const recDraft = (r?: FinRecurrence): RecDraft => ({
   devTxt: r?.dev_txt || "",
   infra: fromNum(r?.infra_eur_month),
   status: r?.status || (r?.active ? "activa" : "por_activar"),
+  probability: r?.probability != null ? String(r.probability) : "50",
   startMonth: r?.start_month || "",
   endMonth: r?.end_month || "",
   billingDay: r?.billing_day ? String(r.billing_day) : "",
@@ -180,6 +186,7 @@ export function ProjectModal({
             infra_eur_month: toNum(d.infra) ?? 0,
             status: d.status,
             active: d.status === "activa",
+            probability: d.status === "por_activar" ? Math.min(100, Math.max(0, Number(d.probability) || 0)) : null,
             start_month: d.startMonth || null,
             end_month: d.endMonth || null,
             billing_day: d.billingDay ? Math.min(31, Math.max(1, Number(d.billingDay))) : null,
@@ -238,7 +245,8 @@ export function ProjectModal({
               <label>Estado</label>
               <select value={d.status} onChange={(e) => set({ ...d, status: e.target.value as RecDraft["status"] })}>
                 <option value="activa">Activa</option>
-                <option value="por_activar">Por activar</option>
+                <option value="confirmada">Confirmada (pendiente del primer cobro)</option>
+                <option value="por_activar">Por activar (probable)</option>
                 <option value="cancelada">Cancelada</option>
               </select>
             </div>
@@ -252,6 +260,12 @@ export function ProjectModal({
               </select>
             </div>
           </div>
+          {d.status === "por_activar" && (
+            <div className="field">
+              <label>Probabilidad de que se active (%)</label>
+              <input type="number" min={0} max={100} value={d.probability} onChange={(e) => set({ ...d, probability: e.target.value })} />
+            </div>
+          )}
           <div className="field-row">
             <div className="field">
               <label>Desde (mes)</label>
@@ -1118,4 +1132,171 @@ export function StripePendingRow({
       </span>
     </div>
   );
+}
+
+// --- Oportunidades ---------------------------------------------------------------
+// Importes de un proyecto del OPS que aún no se ha cerrado. Viven en
+// fin_opportunities (solo propietarios): nunca en la ficha del proyecto.
+
+export function OpportunityModal({ view, onClose, onSaved }: { view: OpportunityView; onClose: () => void; onSaved: () => void }) {
+  const o = view.opp;
+  const label = view.project.client ? `${view.project.client} · ${view.project.name}` : view.project.name;
+  const [amount, setAmount] = useState(fromNum(o?.amount_eur));
+  const [monthly, setMonthly] = useState(fromNum(o?.monthly_eur));
+  const [probability, setProbability] = useState(String(o?.probability ?? DEFAULT_PROBABILITY[view.project.status] ?? 30));
+  const [close, setClose] = useState(o?.expected_close || view.closeMonth);
+  const [firstPct, setFirstPct] = useState(String(o?.first_payment_pct ?? 50));
+  const [delivery, setDelivery] = useState(String(o?.delivery_months ?? 2));
+  const [note, setNote] = useState(o?.note || "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const a = toNum(amount);
+    const m = toNum(monthly);
+    if ([a, m].some((v) => v != null && Number.isNaN(v))) {
+      toast("Revisa los importes: alguno no es un número");
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      project_id: view.project.id,
+      amount_eur: a,
+      monthly_eur: m,
+      probability: Math.min(100, Math.max(0, Number(probability) || 0)),
+      expected_close: close || null,
+      first_payment_pct: Math.min(100, Math.max(0, Number(firstPct) || 0)),
+      delivery_months: Math.min(24, Math.max(0, Number(delivery) || 0)),
+      note: note.trim(),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await createClient().from("fin_opportunities").upsert(payload, { onConflict: "project_id" });
+    setSaving(false);
+    if (error) {
+      toast("No se pudo guardar: " + error.message);
+      return;
+    }
+    toast("Oportunidad guardada");
+    onSaved();
+    onClose();
+  }
+
+  async function remove() {
+    if (o && (await del("fin_opportunities", o.id, `los importes de «${label}»`))) {
+      onSaved();
+      onClose();
+    }
+  }
+
+  return (
+    <Modal title={label} onClose={onClose} onSave={save} saving={saving}>
+      <div className="muted" style={{ fontSize: 12.5, marginBottom: 12 }}>
+        Estado en el OPS: <b>{view.project.status}</b>. Solo tú ves estos importes; en la ficha del proyecto no aparecen.
+      </div>
+      <div className="field-row">
+        <NumField label="Implementación €" value={amount} onChange={setAmount} />
+        <NumField label="Mensualidad €/mes" value={monthly} onChange={setMonthly} />
+      </div>
+      <div className="field-row">
+        <div className="field">
+          <label>Probabilidad (%)</label>
+          <input type="number" min={0} max={100} value={probability} onChange={(e) => setProbability(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Mes previsto de cierre</label>
+          <input type="month" className="com-input" value={close} onChange={(e) => setClose(e.target.value)} />
+        </div>
+      </div>
+      <div className="field-row">
+        <div className="field">
+          <label>Primer pago al cerrar (%)</label>
+          <input type="number" min={0} max={100} value={firstPct} onChange={(e) => setFirstPct(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Meses hasta la entrega</label>
+          <input type="number" min={0} max={24} value={delivery} onChange={(e) => setDelivery(e.target.value)} />
+        </div>
+      </div>
+      <div className="field">
+        <label>Nota</label>
+        <input type="text" value={note} onChange={(e) => setNote(e.target.value)} />
+      </div>
+      {o && (
+        <button type="button" className="btn btn-sm btn-danger" onClick={remove}>
+          Borrar importes
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * Oportunidad ganada → confirmada: crea el proyecto económico, los pagos de la
+ * implementación como entradas programadas confirmadas y la mensualidad como
+ * 'confirmada' (pendiente del primer cobro). Devuelve true si todo fue bien.
+ */
+export async function convertOpportunity(view: OpportunityView, today: string) {
+  const o = view.opp as FinOpportunity;
+  const label = view.project.client ? `${view.project.client} · ${view.project.name}` : view.project.name;
+  if (!o.amount_eur) {
+    toast("Falta el importe de la implementación");
+    return false;
+  }
+  if (!confirm(`¿Pasar «${label}» a confirmado? Se crea el proyecto en Finanzas con sus pagos y su mensualidad.`)) return false;
+  const supabase = createClient();
+  const { data: fp, error } = await supabase
+    .from("fin_projects")
+    .insert({ name: label, status: "activo", project_id: view.project.id, agreed_eur: o.amount_eur, collected_eur: 0, impl_note: "", dev_who: "", dev_paid: false, dev_note: "" })
+    .select("id")
+    .single();
+  if (error || !fp) {
+    toast("No se pudo crear el proyecto: " + (error?.message || ""));
+    return false;
+  }
+  const close = view.closeMonth;
+  const delivery = addMonths(close, o.delivery_months);
+  const on = (m: string) => {
+    const d = `${m}-15`;
+    return d < today ? today : d;
+  };
+  const first = Math.round(((o.amount_eur * o.first_payment_pct) / 100) * 100) / 100;
+  const rest = Math.round((o.amount_eur - first) * 100) / 100;
+  const rows = [
+    first > 0 && { concept: `Implementación — primer pago (${o.first_payment_pct}%)`, amount_eur: first, date: on(close) },
+    rest > 0 && { concept: "Implementación — pago a la entrega", amount_eur: rest, date: on(delivery) },
+  ].filter(Boolean) as { concept: string; amount_eur: number; date: string }[];
+  for (const r of rows) {
+    const { error: e } = await supabase.from("fin_scheduled").insert({
+      ...r,
+      direction: "entrada",
+      counterparty: label,
+      fin_project_id: fp.id,
+      frequency: "unica",
+      certainty: "confirmado",
+      kind: "otro",
+      note: "",
+    });
+    if (e) toast("No se pudo crear un pago: " + e.message);
+  }
+  if (o.monthly_eur) {
+    const { error: e } = await supabase.from("fin_recurrences").insert({
+      fin_project_id: fp.id,
+      slot: 1,
+      title: "",
+      client_eur_month: o.monthly_eur,
+      dev_usd_month: 0,
+      dev_txt: "",
+      infra_eur_month: 0,
+      status: "confirmada",
+      active: false,
+      start_month: addMonths(delivery, 1),
+      billing_day: 1,
+    });
+    if (e) toast("No se pudo crear la mensualidad: " + e.message);
+  }
+  await supabase
+    .from("fin_opportunities")
+    .update({ converted_fin_project_id: fp.id, converted_at: new Date().toISOString() })
+    .eq("id", o.id);
+  toast("Pasado a confirmado. Revisa el coste de dev en Rentabilidad.");
+  return true;
 }

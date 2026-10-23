@@ -22,7 +22,12 @@ export type FinProject = {
   position: number;
 };
 
-export type RecurrenceStatus = "activa" | "por_activar" | "cancelada";
+/**
+ * activa: se cobra. confirmada: firmada, pendiente del primer cobro (cuenta
+ * como confirmada en la previsión, no en el MRR activo). por_activar: sin
+ * fecha clara (cuenta como probable). cancelada: fuera.
+ */
+export type RecurrenceStatus = "activa" | "confirmada" | "por_activar" | "cancelada";
 
 export type FinRecurrence = {
   id: string;
@@ -47,6 +52,26 @@ export type FinRecurrence = {
   stripe_email?: string | null;
   /** Días de pago: la entrada se espera en el día de cobro + estos días. */
   payment_terms_days?: number;
+  /** Solo por_activar: probabilidad (0-100) para la capa probable. */
+  probability?: number | null;
+};
+
+/** Proyecto del OPS (solo lo que Finanzas necesita). */
+export type OpsProject = { id: string; name: string; status: string; client: string };
+
+/** Importes de un proyecto del OPS en descubrimiento, propuesta o presupuesto. */
+export type FinOpportunity = {
+  id: string;
+  project_id: string;
+  amount_eur: number | null;
+  monthly_eur: number | null;
+  probability: number | null;
+  expected_close: string | null; // AAAA-MM
+  first_payment_pct: number;
+  delivery_months: number;
+  note: string;
+  converted_fin_project_id: string | null;
+  converted_at: string | null;
 };
 
 export type OutKind = "dev" | "comision" | "comercial" | "gasto_fijo" | "infra" | "otro";
@@ -151,6 +176,17 @@ export function parseRecurrence(r: Record<string, unknown>): FinRecurrence {
     infra_eur_month: num(r.infra_eur_month),
     status: rec.status || (rec.active ? "activa" : "por_activar"),
     payment_terms_days: num(r.payment_terms_days),
+    probability: numOrNull(r.probability),
+  };
+}
+export function parseOpportunity(r: Record<string, unknown>): FinOpportunity {
+  return {
+    ...(r as unknown as FinOpportunity),
+    amount_eur: numOrNull(r.amount_eur),
+    monthly_eur: numOrNull(r.monthly_eur),
+    probability: numOrNull(r.probability),
+    first_payment_pct: r.first_payment_pct == null ? 50 : num(r.first_payment_pct),
+    delivery_months: r.delivery_months == null ? 2 : num(r.delivery_months),
   };
 }
 export function parseScheduled(r: Record<string, unknown>): FinScheduled {
@@ -398,7 +434,9 @@ export type Movement = {
   probable: boolean;
   probability: number; // 0-100 (100 si es confirmado)
   overdue: boolean; // de un mes pasado y aún sin cobrar / pagar
-  source: "mensualidad" | "factura" | "programado";
+  source: "mensualidad" | "factura" | "programado" | "oportunidad";
+  /** Oportunidades: proyecto del OPS. */
+  opsProjectId?: string;
   scheduledId?: string;
   period?: string; // fecha de la cuota del programado
   invoiceId?: string;
@@ -464,7 +502,57 @@ type ForecastInput = {
   invoices: FinInvoice[];
   scheduled: FinScheduled[];
   payments: FinPayment[];
+  opportunities?: FinOpportunity[];
+  opsProjects?: OpsProject[];
 };
+
+// --- Oportunidades -------------------------------------------------------------
+// Los proyectos del OPS en estos estados son oportunidades; los importes viven
+// en fin_opportunities (solo propietarios), nunca en projects.
+export const OPEN_STATUSES = ["descubrimiento", "propuesta", "presupuesto"];
+const WON_STATUSES = ["desarrollo", "testing", "mantenimiento"];
+export const DEFAULT_PROBABILITY: Record<string, number> = { descubrimiento: 20, propuesta: 40, presupuesto: 50 };
+
+export type OpportunityView = {
+  project: OpsProject;
+  opp: FinOpportunity | null;
+  state: "abierta" | "ganada" | "convertida" | "perdida";
+  probability: number;
+  closeMonth: string; // AAAA-MM (si la prevista ya pasó, el mes actual)
+  closePast: boolean;
+  /** Lo que entra el mes del cierre (primer pago). */
+  firstPayment: number;
+};
+
+/** Una vista por proyecto del OPS que es (o fue) oportunidad. */
+export function opportunityViews(opsProjects: OpsProject[], opportunities: FinOpportunity[], today = todayISO()): OpportunityView[] {
+  const cur = today.slice(0, 7);
+  const byProject = new Map(opportunities.map((o) => [o.project_id, o]));
+  const out: OpportunityView[] = [];
+  for (const project of opsProjects) {
+    const opp = byProject.get(project.id) || null;
+    const open = OPEN_STATUSES.includes(project.status);
+    if (!open && !opp) continue; // nunca fue oportunidad
+    const state: OpportunityView["state"] = open
+      ? "abierta"
+      : opp?.converted_fin_project_id
+        ? "convertida"
+        : WON_STATUSES.includes(project.status)
+          ? "ganada"
+          : "perdida";
+    const target = opp?.expected_close || addMonths(cur, 1);
+    out.push({
+      project,
+      opp,
+      state,
+      probability: opp?.probability ?? DEFAULT_PROBABILITY[project.status] ?? 30,
+      closeMonth: target < cur ? cur : target,
+      closePast: target < cur,
+      firstPayment: ((opp?.amount_eur || 0) * (opp?.first_payment_pct ?? 50)) / 100,
+    });
+  }
+  return out;
+}
 
 /**
  * Movimientos previstos desde el mes actual hasta `toMonth`, más lo vencido
@@ -514,6 +602,35 @@ export function forecastMovements(input: ForecastInput, toMonth: string, today =
     invoices.filter((f) => f.kind === "mensualidad" && f.fin_project_id).map((f) => `${f.fin_project_id}|${f.date.slice(0, 7)}`),
   );
   for (const r of recs) {
+    if (r.status === "confirmada" || r.status === "por_activar") {
+      // Firmada sin primer cobro (confirmado) o sin fecha clara (probable): desde
+      // el mes actual (por_activar, desde el siguiente) o su inicio, si es después
+      const probable = r.status === "por_activar";
+      const from = [r.start_month || "", probable ? addMonths(cur, 1) : cur].sort().pop()!;
+      for (let m = from; m <= toMonth; m = addMonths(m, 1)) {
+        if (!inCalendar(r, m)) continue;
+        if (billedMonths.has(`${r.fin_project_id}|${m}`)) continue;
+        let date = addTerms(dayIn(m, r.billing_day || 1), r.payment_terms_days || 0);
+        if (date < today) date = today; // pendiente: se espera en cuanto se active
+        if (date.slice(0, 7) > toMonth) continue;
+        out.push({
+          key: `rec-${r.id}-${m}`,
+          billedOn: dayIn(m, r.billing_day || 1),
+          date,
+          direction: "entrada",
+          concept: probable ? `Mensualidad por activar${r.title ? ` · ${r.title}` : ""}` : `Mensualidad · pendiente del primer cobro`,
+          counterparty: projName(r.fin_project_id),
+          eur: r.client_eur_month,
+          probable,
+          probability: probable ? (r.probability ?? 50) : 100,
+          overdue: false,
+          source: "mensualidad",
+          recurrenceId: r.id,
+          finProjectId: r.fin_project_id,
+        });
+      }
+      continue;
+    }
     if (r.status !== "activa") continue;
     const days = r.payment_terms_days || 0;
     // Con días de pago, lo cobrado en meses anteriores puede llegar este mes
@@ -568,6 +685,25 @@ export function forecastMovements(input: ForecastInput, toMonth: string, today =
         frequency: s.frequency,
       });
     }
+  }
+
+  // 4) Oportunidades abiertas con importe (siempre probables)
+  for (const v of opportunityViews(input.opsProjects || [], input.opportunities || [], today)) {
+    if (v.state !== "abierta" || !v.opp?.amount_eur) continue;
+    const o = v.opp;
+    const label = v.project.client ? `${v.project.client} · ${v.project.name}` : v.project.name;
+    const delivery = addMonths(v.closeMonth, o.delivery_months);
+    const base = { direction: "entrada" as const, counterparty: label, probable: true, probability: v.probability, overdue: false, source: "oportunidad" as const, opsProjectId: v.project.id };
+    const first = (o.amount_eur! * o.first_payment_pct) / 100;
+    const rest = o.amount_eur! - first;
+    const at = (m: string) => { const d = dayIn(m, 15); return d < today ? today : d; };
+    if (first > 0 && v.closeMonth <= toMonth)
+      out.push({ ...base, key: `opp-${o.id}-1`, date: at(v.closeMonth), concept: `Primer pago (${o.first_payment_pct}%)`, eur: first });
+    if (rest > 0 && delivery <= toMonth)
+      out.push({ ...base, key: `opp-${o.id}-2`, date: at(delivery), concept: "Pago a la entrega", eur: rest });
+    if (o.monthly_eur)
+      for (let m = addMonths(delivery, 1); m <= toMonth; m = addMonths(m, 1))
+        out.push({ ...base, key: `opp-${o.id}-m-${m}`, date: dayIn(m, 1), concept: "Mensualidad", eur: o.monthly_eur });
   }
 
   return out.sort((a, b) => a.date.localeCompare(b.date) || (a.direction === "entrada" ? -1 : 1));
@@ -641,9 +777,13 @@ export function monthlyFlows(input: ForecastInput, back = 4, ahead = 6, today = 
 }
 
 /** Mensualidades "por activar": se avisan aparte, nunca en lo confirmado. */
-export function pendingActivations(projects: FinProject[], recs: FinRecurrence[]) {
+export function pendingActivations(projects: FinProject[], recs: FinRecurrence[], status: RecurrenceStatus = "por_activar") {
+  // Una por proyecto: el primer tramo con ese estado
+  const seen = new Set<string>();
   return recs
-    .filter((r) => r.status === "por_activar")
+    .filter((r) => r.status === status)
+    .sort((a, b) => a.slot - b.slot)
+    .filter((r) => (seen.has(r.fin_project_id) ? false : (seen.add(r.fin_project_id), true)))
     .map((r) => ({ recurrence: r, name: projects.find((p) => p.id === r.fin_project_id)?.name || "", eur: r.client_eur_month }));
 }
 
@@ -809,12 +949,26 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
     scheduled
       .filter((sc) => !sc.closed && sc.frequency !== "unica" && sc.end_date?.slice(0, 7) === m)
       .forEach((sc) => alerts.push({ key: `e-${sc.id}`, tone: "info", text: `Último mes: ${sc.concept}` }));
-    if (m === addMonths(cur, 1))
-      pendingActivations(input.projects, input.recs).forEach((a) =>
-        alerts.push({ key: `a-${a.recurrence.id}`, tone: "info", text: `Por activar: ${a.name} · +${eur0(a.eur)}/mes` }),
+    if (m === addMonths(cur, 1)) {
+      pendingActivations(input.projects, input.recs, "confirmada").forEach((a) =>
+        alerts.push({ key: `c-${a.recurrence.id}`, tone: "info", text: `Pendiente del primer cobro: ${a.name} · ${eur0(a.eur)}/mes` }),
       );
-    probable.forEach((l) =>
-      alerts.push({ key: `p-${l.key}`, tone: "probable", text: `Probable: ${l.concept} · ${eur0(l.eur)} · ${l.movement?.probability}%` }),
+    }
+    // Probable: las oportunidades, una línea por proyecto ("si se cierra X")
+    const oppSum = new Map<string, { name: string; eur: number; p: number }>();
+    probable.forEach((l) => {
+      const mv = l.movement;
+      if (mv?.source === "oportunidad") {
+        const k = mv.opsProjectId || l.counterparty;
+        const prev = oppSum.get(k);
+        oppSum.set(k, { name: l.counterparty, eur: (prev?.eur || 0) + l.eur, p: mv.probability });
+      } else if (mv?.source === "mensualidad")
+        alerts.push({ key: `p-${l.key}`, tone: "probable", text: `Si se activa ${l.counterparty}: +${eur0(l.eur)}/mes · ${mv.probability}%` });
+      else
+        alerts.push({ key: `p-${l.key}`, tone: "probable", text: `Probable: ${l.concept} · ${eur0(l.eur)} · ${mv?.probability}%` });
+    });
+    oppSum.forEach((v, k2) =>
+      alerts.push({ key: `o-${k2}`, tone: "probable", text: `Si se cierra ${v.name}: +${eur0(v.eur)} · ${v.p}%` }),
     );
     cards.push({
       month: m,

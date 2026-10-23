@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { FlowChart } from "./FlowChart";
 import { MonthDetail, UpcomingMonths } from "./UpcomingMonths";
-import { InvoiceModal, PaymentModal, ProjectModal, ReceivableModal, ScheduledModal, SkipModal, StripePendingRow } from "./forms";
+import { convertOpportunity, InvoiceModal, OpportunityModal, PaymentModal, ProjectModal, ReceivableModal, ScheduledModal, SkipModal, StripePendingRow } from "./forms";
 import {
   amountEur,
   computeKpis,
@@ -19,7 +19,9 @@ import {
   monthLabel,
   monthCards,
   monthlyFlows,
+  opportunityViews,
   parseInvoice,
+  parseOpportunity,
   parsePayment,
   parseProject,
   parseReceivable,
@@ -42,6 +44,9 @@ import {
   type FinRecurrence,
   type FinScheduled,
   type FinStripePending,
+  type FinOpportunity,
+  type OpportunityView,
+  type OpsProject,
   type StaleItem,
   type Movement,
 } from "@/lib/finance";
@@ -55,12 +60,19 @@ type Data = {
   scheduled: FinScheduled[];
   payments: FinPayment[];
   stripePending: FinStripePending[];
+  opportunities: FinOpportunity[];
+  opsProjects: OpsProject[];
 };
 
 type InvoiceEdit = { invoice?: FinInvoice; prefill?: Partial<FinInvoice>; closeScheduledId?: string };
 type PaymentEdit = { payment?: FinPayment; prefill?: Partial<FinPayment>; closeScheduledId?: string };
 
-const REC_STATUS: Record<string, string> = { activa: "activa ✓", por_activar: "por activar", cancelada: "cancelada" };
+const REC_STATUS: Record<string, string> = {
+  activa: "activa ✓",
+  confirmada: "confirmada · pendiente del primer cobro",
+  por_activar: "por activar",
+  cancelada: "cancelada",
+};
 const KIND_LABEL: Record<FinPayment["kind"], string> = {
   dev: "Dev",
   comision: "Comisión",
@@ -92,10 +104,11 @@ export function FinanceApp() {
   const [skipItem, setSkipItem] = useState<StaleItem | null>(null);
   const [detailMonth, setDetailMonth] = useState<string | null>(null);
   const [allStale, setAllStale] = useState(false);
+  const [editOpp, setEditOpp] = useState<OpportunityView | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [s, p, r, i, c, sc, po, sp] = await Promise.all([
+    const [s, p, r, i, c, sc, po, sp, op, pj] = await Promise.all([
       supabase.from("fin_settings").select("fx_usd_eur").eq("id", 1).maybeSingle(),
       supabase.from("fin_projects").select("*").order("position").order("created_at"),
       supabase.from("fin_recurrences").select("*"),
@@ -104,8 +117,10 @@ export function FinanceApp() {
       supabase.from("fin_scheduled").select("*").order("date"),
       supabase.from("fin_payments_out").select("*").order("date", { ascending: false }),
       supabase.from("fin_stripe_pending").select("*").order("paid_date"),
+      supabase.from("fin_opportunities").select("*"),
+      supabase.from("projects").select("id, name, status, clients(name)"),
     ]);
-    const err = [s, p, r, i, c, sc, po, sp].find((x) => x.error)?.error;
+    const err = [s, p, r, i, c, sc, po, sp, op, pj].find((x) => x.error)?.error;
     if (err) {
       setError(err.message);
       return;
@@ -120,6 +135,15 @@ export function FinanceApp() {
       scheduled: (sc.data || []).map(parseScheduled),
       payments: (po.data || []).map(parsePayment),
       stripePending: (sp.data || []).map(parseStripePending),
+      opportunities: (op.data || []).map(parseOpportunity),
+      opsProjects: ((pj.data || []) as { id: string; name: string; status: string; clients: { name: string } | { name: string }[] | null }[]).map(
+        (x) => ({
+          id: x.id,
+          name: x.name,
+          status: x.status,
+          client: (Array.isArray(x.clients) ? x.clients[0]?.name : x.clients?.name) || "",
+        }),
+      ),
     });
   }, []);
 
@@ -158,6 +182,11 @@ export function FinanceApp() {
   const staleConfirmed = stale.filter((x) => !x.probable);
   const staleProbable = stale.filter((x) => x.probable);
   const activations = pendingActivations(projects, recs);
+  const confirmedPending = pendingActivations(projects, recs, "confirmada");
+  const opps = opportunityViews(data.opsProjects, data.opportunities, today);
+  const oppOpen = opps.filter((v) => v.state === "abierta").sort((a, b) => (b.opp?.amount_eur || 0) - (a.opp?.amount_eur || 0));
+  const oppWon = opps.filter((v) => v.state === "ganada");
+  const oppLost = opps.filter((v) => v.state === "perdida");
   const periods = computePeriods(invoices, fx, payments);
   const shownPeriods = allMonths ? periods : periods.slice(-6);
   const activos = projects.filter((p) => p.status === "activo");
@@ -357,16 +386,28 @@ export function FinanceApp() {
             <div className="fin-kpi-sub">Solo lo confirmado (incluye lo vencido sin cobrar ni pagar)</div>
           </div>
         </div>
+        {confirmedPending.length > 0 && (
+          <div className="fin-note">
+            Pendiente del primer cobro:{" "}
+            {confirmedPending.map((a, i) => (
+              <span key={a.recurrence.id}>
+                {i > 0 && " · "}
+                <b>{a.name}</b> {eur0(a.eur)}/mes
+              </span>
+            ))}
+            . Ya cuenta en lo confirmado; se activa sola con el primer cobro.
+          </div>
+        )}
         {activations.length > 0 && (
           <div className="fin-note">
             Por activar:{" "}
             {activations.map((a, i) => (
               <span key={a.recurrence.id}>
                 {i > 0 && " · "}
-                <b>+{eur0(a.eur)}/mes</b> si se activa {a.name}
+                <b>+{eur0(a.eur)}/mes</b> si se activa {a.name} ({a.recurrence.probability ?? 50}%)
               </span>
             ))}
-            . No cuentan en lo confirmado.
+            . Cuentan como probable.
           </div>
         )}
 
@@ -407,6 +448,96 @@ export function FinanceApp() {
           <div className="section-title">Próximos 60 días</div>
         </div>
         <UpcomingMonths cards={nextCards} showProbable={showProbable} onOpen={setDetailMonth} />
+
+        {/* Oportunidades: proyectos del OPS en descubrimiento, propuesta o presupuesto */}
+        {(oppOpen.length > 0 || oppWon.length > 0) && (
+          <>
+            <div className="fin-head">
+              <div className="section-title">Oportunidades</div>
+              <span className="muted" style={{ fontSize: 12.5 }}>
+                Salen solas de los proyectos del OPS en descubrimiento, propuesta o presupuesto
+              </span>
+            </div>
+            {oppWon.length > 0 && (
+              <div className="fin-attn">
+                <b>🎉 {oppWon.length === 1 ? "1 oportunidad ganada" : `${oppWon.length} oportunidades ganadas`}</b>
+                <span className="muted"> · el proyecto ya está en desarrollo</span>
+                {oppWon.map((v) => (
+                  <div key={v.project.id} className="fin-attn-row">
+                    <span className="fin-move-date">{v.project.status}</span>
+                    <span>
+                      <b>{v.project.client ? `${v.project.client} · ${v.project.name}` : v.project.name}</b>
+                    </span>
+                    <span className="fin-move-amount fin-in">
+                      {v.opp?.amount_eur ? eur0(v.opp.amount_eur) : "—"}
+                      {v.opp?.monthly_eur ? ` + ${eur0(v.opp.monthly_eur)}/mes` : ""}
+                    </span>
+                    <span className="fin-attn-acts">
+                      <button
+                        className="btn btn-sm"
+                        onClick={async () => {
+                          if (await convertOpportunity(v, today)) load();
+                        }}
+                      >
+                        Pasar a confirmado
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="fin-opps">
+              {oppOpen.map((v) => (
+                <div key={v.project.id} className={"card fin-opp" + (v.opp?.amount_eur ? "" : " is-empty")} onClick={() => setEditOpp(v)}>
+                  <div className="fin-opp-head">
+                    <span className="fin-opp-name">{v.project.name}</span>
+                    <span className="fin-tag">{v.project.status}</span>
+                  </div>
+                  {v.project.client && <div className="muted fin-opp-client">{v.project.client}</div>}
+                  {v.opp?.amount_eur ? (
+                    <>
+                      <div className="fin-opp-amount">
+                        {eur0(v.opp.amount_eur)}
+                        {v.opp.monthly_eur ? <span className="muted"> + {eur0(v.opp.monthly_eur)}/mes</span> : null}
+                      </div>
+                      <div className="fin-opp-bar">
+                        <div style={{ width: `${v.probability}%` }} />
+                      </div>
+                      <div className="fin-opp-meta">
+                        <span>{v.probability}%</span>
+                        <span>
+                          cierre {monthLabel(v.closeMonth)}
+                          {v.closePast && " ⚠️ fecha pasada"}
+                        </span>
+                      </div>
+                      <div className="fin-opp-if">
+                        Si se cierra en {monthLabel(v.closeMonth).split(" ")[0].toLowerCase()}, entran <b>{eur0(v.firstPayment)}</b> ese mes
+                      </div>
+                    </>
+                  ) : (
+                    <div className="fin-opp-missing">Falta el importe · pulsa para añadirlo</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {oppLost.length > 0 && (
+              <details className="fin-sec" style={{ marginTop: 10 }}>
+                <summary>Oportunidades perdidas o aparcadas ({oppLost.length})</summary>
+                <div className="card">
+                  {oppLost.map((v) => (
+                    <div key={v.project.id} className="fin-list-row" onClick={() => setEditOpp(v)}>
+                      <span className="fin-move-concept">
+                        <b>{v.project.client ? `${v.project.client} · ${v.project.name}` : v.project.name}</b>
+                        <span className="fin-tag">{v.project.status}</span>
+                      </span>
+                      <span className="fin-move-amount muted">{v.opp?.amount_eur ? eur0(v.opp.amount_eur) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </>
+        )}
 
         {/* Detalle, plegado */}
         <details className="fin-sec">
@@ -733,6 +864,7 @@ export function FinanceApp() {
         <PaymentModal {...editPayment} finProjects={projects} onClose={() => setEditPayment(null)} onSaved={load} />
       )}
       {skipItem && <SkipModal item={skipItem} onClose={() => setSkipItem(null)} onSaved={load} />}
+      {editOpp && <OpportunityModal view={editOpp} onClose={() => setEditOpp(null)} onSaved={load} />}
     </>
   );
 }
