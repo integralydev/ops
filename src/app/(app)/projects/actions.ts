@@ -159,3 +159,75 @@ export async function notifyTaskComment(commentId: string) {
     return { ok: false };
   }
 }
+
+// Avisa por email de una actualización nueva a quien sigue el proyecto (el
+// ojo de la pestaña Actualizaciones). Nunca a quien publica ni a quien ya no
+// tiene acceso al proyecto (lo decide project_update_recipients en la base de
+// datos). Se llama justo después de publicar; nunca lanza errores.
+export async function notifyProjectUpdate(noteId: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { skipped: "no-session" };
+
+    // Con la sesión de quien publica: RLS solo devuelve lo que puede ver
+    const { data: note } = await supabase
+      .from("notes")
+      .select("id, project_id, author_id, text, image_paths")
+      .eq("id", noteId)
+      .maybeSingle();
+    if (!note || note.author_id !== user.id) return { skipped: "no-note" };
+
+    const [{ data: project }, { data: followers }] = await Promise.all([
+      supabase.from("projects").select("id, name, client_id").eq("id", note.project_id).maybeSingle(),
+      supabase.rpc("project_update_recipients", { pid: note.project_id }),
+    ]);
+    const recipients = ((followers || []) as string[]).filter((id) => id !== user.id);
+    if (!project || !recipients.length) return { skipped: "nobody" };
+
+    const [{ data: client }, { data: profiles }] = await Promise.all([
+      project.client_id
+        ? supabase.from("clients").select("name").eq("id", project.client_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from("profiles").select("id, full_name").in("id", [user.id, ...recipients]),
+    ]);
+    const nameOf = (id: string) => profiles?.find((p) => p.id === id)?.full_name || "Alguien";
+
+    const link = `${await appBaseUrl()}/projects/${project.id}?tab=actualizaciones`;
+    const where = client?.name ? `${client.name} · ${project.name}` : project.name;
+    const who = nameOf(user.id);
+    const body = note.text.length > 1200 ? note.text.slice(0, 1200) + "…" : note.text;
+    const nImages = (note.image_paths || []).length;
+    const imagesTxt = nImages ? (nImages === 1 ? "Incluye 1 captura." : `Incluye ${nImages} capturas.`) : "";
+
+    // Los emails viven en auth.users: hace falta el cliente admin
+    const admin = createAdminClient();
+    let sent = 0;
+    for (const id of recipients) {
+      const { data: u } = await admin.auth.admin.getUserById(id);
+      const to = u?.user?.email;
+      if (!to) continue;
+      const firstName = nameOf(id).split(" ")[0];
+      const subject = `Actualización en ${where}`;
+      const text = `Hola ${firstName},\n\n${who} ha publicado una actualización en ${where}:\n\n${body}${imagesTxt ? `\n\n${imagesTxt}` : ""}\n\nÁbrela aquí: ${link}\n\n— Integraly Ops`;
+      const html = `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1C1C1F">
+  <p style="margin:0 0 16px;font-size:15px">Hola ${escapeHtml(firstName)},</p>
+  <p style="margin:0 0 12px;font-size:15px;color:#6B6B75"><b style="color:#1C1C1F">${escapeHtml(who)}</b> ha publicado una actualización en <b style="color:#1C1C1F">${escapeHtml(where)}</b>:</p>
+  ${body ? `<div style="border-left:3px solid #7467D3;background:#F7F7F9;border-radius:8px;padding:12px 16px;margin:0 0 ${imagesTxt ? 10 : 22}px;font-size:15px;line-height:1.5;white-space:pre-wrap">${escapeHtml(body)}</div>` : ""}
+  ${imagesTxt ? `<p style="margin:0 0 22px;font-size:13px;color:#9D9DA6">🖼️ ${imagesTxt}</p>` : ""}
+  <a href="${escapeHtml(link)}" style="display:inline-block;background:#17161F;color:#fff;text-decoration:none;padding:11px 22px;border-radius:99px;font-weight:600;font-size:14px">Ver la actualización</a>
+  <p style="margin:28px 0 0;font-size:12px;color:#9D9DA6">Integraly Ops · Te llega porque sigues este proyecto. Para dejar de recibirlo, quita el ojo en su pestaña Actualizaciones.</p>
+</div>`;
+      const res = await sendEmail({ to, subject, html, text });
+      if (res.ok) sent++;
+      else if (!res.skipped) console.error("notifyProjectUpdate: email no enviado", res.error);
+    }
+    return { ok: true, sent };
+  } catch (e) {
+    console.error("notifyProjectUpdate", e);
+    return { ok: false };
+  }
+}

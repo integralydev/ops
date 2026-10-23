@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { useAppData } from "@/components/app-data";
 import { useNotes } from "@/lib/hooks/useProjectDetail";
@@ -8,11 +8,13 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { fmtDateTime, fmtRelative } from "@/lib/format";
 import { UPDATES_BUCKET, UpdateImages } from "@/components/project/UpdateImages";
+import { notifyProjectUpdate } from "@/app/(app)/projects/actions";
 import type { Note, Project } from "@/lib/database.types";
 
 // Pestaña "Actualizaciones": bitácora con fecha de lo que se va haciendo en el
 // proyecto (tabla notes), con capturas adjuntas. Edita el autor o
-// admin/director; solo admin/director borran.
+// admin/director; solo admin/director borran. Con el ojo, cada persona sigue
+// el proyecto y recibe por email lo que publiquen los demás.
 export function NotesTab({ project }: { project: Project }) {
   const { me, isStaff, nameFor } = useAppData();
   const { rows: notes, loading, removeLocal, upsertLocal } = useNotes(project.id);
@@ -23,6 +25,36 @@ export function NotesTab({ project }: { project: Project }) {
   const [images, setImages] = useState<{ file: File; url: string }[]>([]);
   const [posting, setPosting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [following, setFollowing] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    createClient()
+      .from("project_follows")
+      .select("user_id")
+      .eq("project_id", project.id)
+      .eq("user_id", me.id)
+      .maybeSingle()
+      .then(({ data }) => alive && setFollowing(!!data));
+    return () => {
+      alive = false;
+    };
+  }, [project.id, me.id]);
+
+  async function toggleFollow() {
+    const supabase = createClient();
+    const next = !following;
+    setFollowing(next);
+    const { error } = next
+      ? await supabase.from("project_follows").insert({ project_id: project.id, user_id: me.id })
+      : await supabase.from("project_follows").delete().eq("project_id", project.id).eq("user_id", me.id);
+    if (error) {
+      setFollowing(!next);
+      toast("No se pudo guardar: " + error.message);
+      return;
+    }
+    toast(next ? "Te avisaremos por email de las actualizaciones nuevas" : "Ya no sigues este proyecto");
+  }
 
   const list = Object.values(notes).sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
 
@@ -66,12 +98,16 @@ export function NotesTab({ project }: { project: Project }) {
       paths.push(path);
     }
 
-    const { error } = await supabase.from("notes").insert({
-      project_id: project.id,
-      author_id: me.id,
-      text: text.trim(),
-      image_paths: paths,
-    });
+    const { data: created, error } = await supabase
+      .from("notes")
+      .insert({
+        project_id: project.id,
+        author_id: me.id,
+        text: text.trim(),
+        image_paths: paths,
+      })
+      .select("id")
+      .single();
     setPosting(false);
     if (error) {
       if (paths.length) await supabase.storage.from(UPDATES_BUCKET).remove(paths);
@@ -81,6 +117,8 @@ export function NotesTab({ project }: { project: Project }) {
     images.forEach((i) => URL.revokeObjectURL(i.url));
     setImages([]);
     setText("");
+    // Aviso por email a quien sigue el proyecto (sin esperar: no bloquea)
+    if (created) notifyProjectUpdate(created.id);
   }
 
   async function remove(id: string, paths: string[]) {
@@ -121,6 +159,17 @@ export function NotesTab({ project }: { project: Project }) {
 
   return (
     <div className="card pad">
+      <div className="update-follow">
+        <button
+          className={"btn btn-sm" + (following ? " is-following" : "")}
+          onClick={toggleFollow}
+          disabled={following === null}
+          title={following ? "Dejar de recibir las actualizaciones por email" : "Recibir por email lo que publiquen los demás en este proyecto"}
+          aria-pressed={!!following}
+        >
+          {following ? "👁 Siguiendo" : "👁 Seguir"}
+        </button>
+      </div>
       <div className="update-compose">
         <textarea
           placeholder="¿Qué se ha hecho? Ej.: «Supabase, Vercel y GitHub conectados. Calendario funcionando.» Puedes pegar capturas con Cmd+V."

@@ -834,6 +834,8 @@ span.task-comment-badge{cursor:default;}
 .last-update{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:11px 13px;}
 .last-update .note-head{align-items:center;}
 .notes-doc{font-size:13.4px; color:var(--ink-soft); white-space:pre-wrap; word-break:break-word; line-height:1.6;}
+.update-follow{display:flex; justify-content:flex-end; margin:-4px 0 10px;}
+.update-follow .btn.is-following{background:var(--accent-soft); color:var(--accent-dim); border-color:transparent;}
 .update-compose{display:flex; flex-direction:column; gap:10px; padding-bottom:16px; margin-bottom:6px; border-bottom:1px solid var(--border);}
 .update-compose textarea{width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); font-size:13.6px; font-family:inherit; resize:vertical; min-height:70px;}
 .update-images{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
