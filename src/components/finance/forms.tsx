@@ -397,14 +397,23 @@ export function InvoiceModal({
   const [concept, setConcept] = useState(base?.concept || "");
   const [date, setDate] = useState(base?.date || new Date().toISOString().slice(0, 10));
   const [eur, setEur] = useState(fromNum(base?.eur));
+  const [status, setStatus] = useState(base?.status || "pendiente");
   const [usd, setUsd] = useState(fromNum(base?.usd));
   const [usdRec, setUsdRec] = useState(fromNum(base?.usd_received));
   const [aprox, setAprox] = useState(base?.aprox || "");
   const [kind, setKind] = useState(base?.kind || "implementacion");
-  const [status, setStatus] = useState(base?.status || "pendiente");
   const [dateTxt, setDateTxt] = useState(base?.date_txt || "");
   const [finProjectId, setFinProjectId] = useState(base?.fin_project_id || "");
+  // Fecha de cobro (caja). Vacía en una cobrada = la fecha de factura.
+  const [paidDate, setPaidDate] = useState(base?.paid_date || "");
   const [saving, setSaving] = useState(false);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  function changeStatus(next: FinInvoice["status"]) {
+    // Al pasar a cobrada se pide la fecha de cobro: por defecto, hoy
+    if (next === "cobrada" && status !== "cobrada" && !paidDate) setPaidDate(todayStr);
+    setStatus(next);
+  }
 
   async function save() {
     if (!date) {
@@ -429,6 +438,7 @@ export function InvoiceModal({
       status,
       date_txt: dateTxt.trim() || null,
       fin_project_id: finProjectId || null,
+      paid_date: status === "cobrada" ? paidDate || null : null,
       ...(!invoice && prefill?.scheduled_id
         ? { scheduled_id: prefill.scheduled_id, scheduled_period: prefill.scheduled_period || null }
         : {}),
@@ -463,7 +473,7 @@ export function InvoiceModal({
           <input type="text" value={number} onChange={(e) => setNumber(e.target.value)} autoFocus={!invoice} />
         </div>
         <div className="field">
-          <label>Fecha</label>
+          <label>Fecha de factura</label>
           <input type="date" className="com-input" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
       </div>
@@ -507,7 +517,7 @@ export function InvoiceModal({
         </div>
         <div className="field">
           <label>Estado</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value as FinInvoice["status"])}>
+          <select value={status} onChange={(e) => changeStatus(e.target.value as FinInvoice["status"])}>
             <option value="cobrada">Cobrada</option>
             <option value="pendiente">Pendiente</option>
             <option value="parcial">Parcial</option>
@@ -515,6 +525,13 @@ export function InvoiceModal({
           </select>
         </div>
       </div>
+      {status === "cobrada" && (
+        <div className="field">
+          <label>Fecha de cobro (cuándo llegó el dinero)</label>
+          <input type="date" className="com-input" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} />
+          {!paidDate && <div className="muted" style={{ fontSize: 11.8, marginTop: 4 }}>Vacía: cuenta la fecha de la factura.</div>}
+        </div>
+      )}
       <div className="field">
         <label>Fecha en texto (opcional)</label>
         <input type="text" value={dateTxt} onChange={(e) => setDateTxt(e.target.value)} placeholder="Si se quiere mostrar distinta" />
@@ -1045,6 +1062,7 @@ export function StripePendingRow({
           client: project.name,
           concept: x.concept,
           date: x.paid_date,
+          paid_date: x.paid_date,
           eur: usd ? Math.round(amount * fx * 100) / 100 : amount,
           usd: usd ? amount : null,
           kind: "mensualidad",

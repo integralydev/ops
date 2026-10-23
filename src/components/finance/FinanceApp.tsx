@@ -609,7 +609,12 @@ export function FinanceApp() {
                   <span className="fin-inv-num">{f.number}</span>
                   <span className="fin-inv-client">{f.client}</span>
                   <span className="fin-inv-concept">{f.concept}</span>
-                  <span className="muted fin-inv-date">{f.date_txt || fFecha(f.date)}</span>
+                  <span className="muted fin-inv-date">
+                    {f.date_txt || fFecha(f.date)}
+                    {f.status === "cobrada" && f.paid_date && f.paid_date !== f.date && (
+                      <span className="fin-inv-paid">cobrada el {fFecha(f.paid_date)}</span>
+                    )}
+                  </span>
                   <span className="fin-inv-amount">
                     {a.main} {a.sub && <span className="muted">{a.sub}</span>}
                   </span>

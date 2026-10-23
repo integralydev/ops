@@ -101,6 +101,8 @@ export type FinInvoice = {
   scheduled_id?: string | null;
   scheduled_period?: string | null;
   stripe_invoice_id?: string | null;
+  /** Fecha de cobro (caja). Si está cobrada y no la tiene, vale `date`. */
+  paid_date?: string | null;
 };
 
 export type FinStripePending = {
@@ -297,40 +299,51 @@ export function projectMargin(p: FinProject, fx: number) {
 }
 
 /** Importe en € de un pago o programado (USD × tipo de cambio). */
+/** Fecha de caja de una factura cobrada: la de cobro o, si no hay, la de factura. */
+export const cashDate = (f: FinInvoice) => f.paid_date || f.date;
+
 export const amountEur = (x: { amount_eur: number | null; amount_usd: number | null }, fx: number) =>
   x.amount_eur != null ? x.amount_eur : (x.amount_usd || 0) * fx;
 
 /**
  * Resumen por mes, calculado desde las facturas (y, desde la fase 2, los
  * pagos hechos: Gastos dev = pagos de tipo dev; Beneficio neto = cobrado −
- * comisiones bancarias − todos los pagos hechos del mes).
+ * comisiones bancarias − todos los pagos hechos del mes). "Facturado" va por
+ * la fecha de factura; lo cobrado y las comisiones, por la de cobro (caja).
  */
 export function computePeriods(invoices: FinInvoice[], fx: number, payments?: FinPayment[]) {
   const meses = [
-    ...new Set([...invoices.map((f) => f.date.slice(0, 7)), ...(payments || []).map((p) => p.date.slice(0, 7))]),
+    ...new Set([
+      ...invoices.map((f) => f.date.slice(0, 7)),
+      ...invoices.filter((f) => f.status === "cobrada").map((f) => cashDate(f).slice(0, 7)),
+      ...(payments || []).map((p) => p.date.slice(0, 7)),
+    ]),
   ].sort();
   const paid = (m: string, filtro: (p: FinPayment) => boolean = () => true) =>
     (payments || []).filter((p) => p.date.slice(0, 7) === m && filtro(p)).reduce((s, p) => s + amountEur(p, fx), 0);
   const suma = (m: string, filtro: (f: FinInvoice) => boolean) =>
     invoices.filter((f) => f.date.slice(0, 7) === m && filtro(f)).reduce((s, f) => s + f.eur, 0);
+  // Lo cobrado, por mes de cobro
+  const cobradoEn = (m: string, filtro: (f: FinInvoice) => boolean) =>
+    invoices.filter((f) => f.status === "cobrada" && cashDate(f).slice(0, 7) === m && filtro(f)).reduce((s, f) => s + f.eur, 0);
   // Cobrado = Implementación + Mensualidades (lo que no es mensualidad cuenta como implementación)
   const cobradaMens = (f: FinInvoice) => f.status === "cobrada" && f.kind === "mensualidad";
   const cobradaImpl = (f: FinInvoice) => f.status === "cobrada" && f.kind !== "mensualidad";
   // Comisiones bancarias = USD emitido − USD recibido (sobre todo wires), en €
   const comisiones = (m: string) =>
     invoices
-      .filter((f) => f.date.slice(0, 7) === m && f.status === "cobrada" && f.usd_received != null)
+      .filter((f) => f.status === "cobrada" && cashDate(f).slice(0, 7) === m && f.usd_received != null)
       .reduce((s, f) => s + Math.max(0, (f.usd || 0) - (f.usd_received || 0)) * fx, 0);
   return meses.map((m) => {
-    const cobrado = suma(m, (f) => f.status === "cobrada");
+    const cobrado = cobradoEn(m, () => true);
     const com = comisiones(m);
     return {
       month: m,
       label: monthLabel(m),
       facturado: suma(m, () => true),
       cobrado,
-      cobradoImpl: suma(m, cobradaImpl),
-      cobradoMens: suma(m, cobradaMens),
+      cobradoImpl: cobradoEn(m, cobradaImpl),
+      cobradoMens: cobradoEn(m, cobradaMens),
       comisiones: com,
       // Sin pagos cargados quedan vacías, como en el panel
       gastosDev: payments ? paid(m, (p) => p.kind === "dev") : (null as number | null),
@@ -472,11 +485,11 @@ export function forecastMovements(input: ForecastInput, toMonth: string, today =
   const terms = (projectId?: string | null) =>
     Math.max(0, ...recs.filter((r) => r.fin_project_id === projectId).map((r) => r.payment_terms_days || 0));
 
-  // 1) Facturas pendientes (o parciales): cuando se espera el dinero (las de
-  //    mensualidad, con los días de pago); de meses pasados, vencidas
+  // 1) Facturas pendientes (o parciales): se esperan en su fecha + los días de
+  //    pago de la mensualidad de su proyecto (si la tiene); si ya pasó, vencidas
   for (const f of invoices) {
     if (f.status !== "pendiente" && f.status !== "parcial") continue;
-    const expected = f.kind === "mensualidad" ? addTerms(f.date, terms(f.fin_project_id)) : f.date;
+    const expected = addTerms(f.date, terms(f.fin_project_id));
     if (expected.slice(0, 7) > toMonth) continue;
     out.push({
       key: `inv-${f.id}`,
@@ -582,7 +595,9 @@ export function monthlyFlows(input: ForecastInput, back = 4, ahead = 6, today = 
   const cur = today.slice(0, 7);
   const last = addMonths(cur, ahead - 1);
   const moves = forecastMovements(input, last, today);
-  const cobradas = (m: string) => invoices.filter((f) => f.status === "cobrada" && f.date.slice(0, 7) === m).reduce((s, f) => s + f.eur, 0);
+  // Caja: lo cobrado cuenta en el mes en que llegó
+  const cobradas = (m: string) =>
+    invoices.filter((f) => f.status === "cobrada" && cashDate(f).slice(0, 7) === m).reduce((s, f) => s + f.eur, 0);
   const pagados = (m: string) => payments.filter((p) => p.date.slice(0, 7) === m).reduce((s, p) => s + amountEur(p, fx), 0);
 
   const rows: MonthFlow[] = [];
@@ -714,7 +729,7 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
   });
   const fromInvoice = (f: FinInvoice): CardLine => ({
     key: `inv-${f.id}`,
-    date: f.date,
+    date: cashDate(f),
     concept: f.concept || `Factura ${f.number}`,
     counterparty: f.client,
     eur: f.eur,
@@ -743,7 +758,7 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
       !x.overdue &&
       (x.source === "mensualidad" ||
         (x.source === "factura" && invoices.find((f) => f.id === x.invoiceId)?.kind === "mensualidad"));
-    const cobradas = invoices.filter((f) => f.status === "cobrada" && f.date.slice(0, 7) === m);
+    const cobradas = invoices.filter((f) => f.status === "cobrada" && cashDate(f).slice(0, 7) === m);
     const pagos = payments.filter((p) => p.date.slice(0, 7) === m);
 
     const mensualidades = [
