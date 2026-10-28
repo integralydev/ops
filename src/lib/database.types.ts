@@ -172,6 +172,19 @@ export interface Activity {
   created_at: string;
 }
 
+// Hitos: lo importante que ha pasado en la agencia. Solo propietarios (RLS).
+export type MilestoneArea = "clientes" | "ventas" | "captacion" | "equipo" | "estrategia" | "dinero" | "laboratorio" | "otros";
+export interface Milestone {
+  id: string;
+  happened_on: string;
+  title: string;
+  detail: string | null;
+  area: MilestoneArea;
+  project_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {

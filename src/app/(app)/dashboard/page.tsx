@@ -7,6 +7,7 @@ import { useFeaturedLinks, useProjects } from "@/lib/hooks/useProjects";
 import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { RecentActivity } from "@/components/RecentActivity";
+import { Milestones } from "@/components/Milestones";
 import { useRouter } from "next/navigation";
 import { LAB_STATUSES, PROJECT_STATUSES, kindOf, statusLabel } from "@/lib/format";
 import { pickGreeting } from "@/lib/greetings";
@@ -142,6 +143,14 @@ export default function DashboardPage() {
           </section>
 
           <aside>
+            {me.isOwner && (
+              <>
+                <div className="dash-section-head">
+                  <div className="section-title">Lo que ha pasado</div>
+                </div>
+                <Milestones projects={projects} />
+              </>
+            )}
             <div className="dash-section-head">
               <div className="section-title">Actividad reciente</div>
             </div>
