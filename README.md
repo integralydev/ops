@@ -111,3 +111,39 @@ datos (`supabase/schema.sql`). Un developer que intente leer proyectos ajenos
 directamente contra la API de Supabase, sin pasar por la interfaz, tampoco
 podría — la base de datos se lo impide. Esto es más estricto que la primera
 versión (el artifact de Claude), que solo filtraba en el cliente.
+
+## Finanzas (solo propietarios)
+
+`/finanzas` y las tablas `fin_*` son solo para propietarios (tabla `owners`,
+editable únicamente desde el SQL Editor) con sesión verificada en dos pasos
+(aal2): lo exige la base de datos (`can_see_finance()`). Reglas que no se
+rompen: nada de `fin_*` en Realtime, sin triggers de actividad ni correos,
+sin `service_role`.
+
+Criterios de cálculo (`src/lib/finance.ts`):
+
+- "Queda" y la línea continua del gráfico: solo lo confirmado. Lo probable va
+  aparte, ponderado por su probabilidad.
+- En la previsión, todas las salidas salen de `fin_scheduled`; el coste dev e
+  infra de los tramos de mensualidad solo cuenta para la rentabilidad.
+- Caja por fecha de cobro (`fin_invoices.paid_date`, o `date` si no hay);
+  "Facturado" por fecha de factura.
+- Días de pago (`payment_terms_days`): cada 30 días = un mes natural, y se
+  aplican a todas las facturas pendientes del proyecto.
+- Programados anuales: fila propia, como los únicos.
+
+### Webhook de Stripe
+
+`/api/stripe/webhook` no guarda nada por sí mismo: pasa el cuerpo y la firma a
+`fin_stripe_webhook` (SQL, `security definer`, solo la puede ejecutar `anon`),
+que verifica la firma con el secreto guardado en `fin_secrets` (sin acceso por
+API). Eventos: `invoice.paid`, `checkout.session.completed` y
+`checkout.session.async_payment_succeeded`. Vincula el cobro a la mensualidad
+por Payment Link, customer o email; si no encaja, queda en
+`fin_stripe_pending` y se vincula a mano desde Finanzas. Para cambiar el
+secreto (SQL Editor):
+
+```sql
+insert into fin_secrets (key, value) values ('stripe_webhook_secret', 'whsec_...')
+on conflict (key) do update set value = excluded.value;
+```
