@@ -9,7 +9,7 @@ import { openProjectFile, uploadProjectFile } from "@/lib/uploads";
 import { fileGlyph, fmtDateTime } from "@/lib/format";
 import type { FileRow, Task, TaskComment, TaskStage } from "@/lib/database.types";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
-import { TaskImages, isImage } from "./TaskImages";
+import { TaskImages, isMedia } from "./TaskImages";
 import { AudioRecorder, TaskAudios, isAudio } from "./TaskAudio";
 import { TaskCommentsSection } from "./TaskComments";
 import {
@@ -64,9 +64,9 @@ export function TaskPanel({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [dropping, setDropping] = useState(false);
   const due = dueInfo(t.due_date, t.done);
-  const images = files.filter(isImage);
+  const images = files.filter(isMedia);
   const audios = files.filter(isAudio);
-  const others = files.filter((f) => !isImage(f) && !isAudio(f));
+  const others = files.filter((f) => !isMedia(f) && !isAudio(f));
   const canDeleteFile = (f: FileRow) => isStaff || f.uploaded_by === me.id;
 
   // Esc cierra el panel (si el visor de imágenes está abierto, cierra solo el visor)
@@ -197,10 +197,10 @@ export function TaskPanel({
         <TaskImages images={images} canDelete={canDeleteFile} onViewerChange={setViewerOpen} />
         <div className="task-img-add">
           <label className="task-file" style={{ cursor: "pointer" }}>
-            {attaching ? "Subiendo…" : "🖼 Añadir imagen"}
+            {attaching ? "Subiendo…" : "🖼 Añadir imagen o vídeo"}
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               style={{ display: "none" }}
               disabled={attaching}

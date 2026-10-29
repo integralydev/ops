@@ -7,9 +7,12 @@ import { FILES_BUCKET } from "@/lib/uploads";
 import type { FileRow } from "@/lib/database.types";
 
 export const isImage = (f: Pick<FileRow, "content_type">) => !!f.content_type?.startsWith("image/");
+export const isVideo = (f: Pick<FileRow, "content_type">) => !!f.content_type?.startsWith("video/");
+// Imágenes y vídeos comparten el bloque grande de arriba de la tarea
+export const isMedia = (f: Pick<FileRow, "content_type">) => isImage(f) || isVideo(f);
 
-// Capturas de una tarea, arriba del panel lateral: la imagen en grande y, si
-// hay varias, miniaturas para cambiar. El bucket es privado: se piden URLs
+// Capturas y vídeos de una tarea, arriba del panel lateral: en grande y, si
+// hay varios, miniaturas para cambiar. Los vídeos se reproducen ahí mismo. El bucket es privado: se piden URLs
 // firmadas. Clic → visor a pantalla completa, con flechas para pasar.
 export function TaskImages({
   images,
@@ -71,7 +74,7 @@ export function TaskImages({
   }, [viewing, images.length]);
 
   async function remove(f: FileRow) {
-    if (!confirm(`¿Borrar la imagen «${f.filename}»?`)) return;
+    if (!confirm(`¿Borrar ${isVideo(f) ? "el vídeo" : "la imagen"} «${f.filename}»?`)) return;
     const supabase = createClient();
     const { error } = await supabase.from("files").delete().eq("id", f.id);
     if (error) {
@@ -91,16 +94,26 @@ export function TaskImages({
     <>
       {/* Imagen grande (sin recortar); si hay varias, miniaturas debajo para cambiar */}
       <div className="task-hero">
-        <button className="task-hero-btn" onClick={() => open(shownIndex)} title="Ver en grande">
-          {urls[shown.storage_path] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={urls[shown.storage_path]} alt={shown.filename} />
-          ) : (
-            <span className="task-img-loading" />
-          )}
-        </button>
+        {isVideo(shown) ? (
+          <div className="task-hero-btn">
+            {urls[shown.storage_path] ? (
+              <video src={urls[shown.storage_path]} controls playsInline preload="metadata" />
+            ) : (
+              <span className="task-img-loading" />
+            )}
+          </div>
+        ) : (
+          <button className="task-hero-btn" onClick={() => open(shownIndex)} title="Ver en grande">
+            {urls[shown.storage_path] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={urls[shown.storage_path]} alt={shown.filename} />
+            ) : (
+              <span className="task-img-loading" />
+            )}
+          </button>
+        )}
         {canDelete(shown) && (
-          <button className="task-img-del" title="Borrar esta imagen" onClick={() => remove(shown)}>
+          <button className="task-img-del" title="Borrar" onClick={() => remove(shown)}>
             ✕
           </button>
         )}
@@ -115,8 +128,12 @@ export function TaskImages({
               title={f.filename}
             >
               {urls[f.storage_path] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={urls[f.storage_path]} alt={f.filename} />
+                isVideo(f) ? (
+                  <video src={`${urls[f.storage_path]}#t=0.1`} muted playsInline preload="metadata" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={urls[f.storage_path]} alt={f.filename} />
+                )
               ) : (
                 <span className="task-img-loading" />
               )}
@@ -127,8 +144,18 @@ export function TaskImages({
 
       {current && (
         <div className="img-viewer" onClick={() => open(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={urls[current.storage_path]} alt={current.filename} onClick={(e) => e.stopPropagation()} />
+          {isVideo(current) ? (
+            <video
+              src={urls[current.storage_path]}
+              controls
+              autoPlay
+              playsInline
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={urls[current.storage_path]} alt={current.filename} onClick={(e) => e.stopPropagation()} />
+          )}
           <div className="img-viewer-bar" onClick={(e) => e.stopPropagation()}>
             <span>
               {current.filename}

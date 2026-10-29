@@ -10,7 +10,7 @@ import type { FileRow, Project, Task, TaskComment, TaskStage } from "@/lib/datab
 import { kindOf } from "@/lib/format";
 import { notifyTaskAssigned } from "@/app/(app)/projects/actions";
 import { TaskPanel } from "@/components/project/tasks/TaskPanel";
-import { isImage } from "@/components/project/tasks/TaskImages";
+import { isMedia } from "@/components/project/tasks/TaskImages";
 import { isAudio } from "@/components/project/tasks/TaskAudio";
 import { CommentBadge, unreadOf, useCommentReads } from "@/components/project/tasks/TaskComments";
 import {
@@ -738,7 +738,7 @@ function TaskCard(p: RowProps) {
 
 // Desde fuera solo se ve que hay imágenes / adjuntos; se ven al abrir la tarea.
 function FileBadges({ files, onOpen }: { files: FileRow[]; onOpen?: () => void }) {
-  const imgs = files.filter(isImage).length;
+  const imgs = files.filter(isMedia).length;
   const audios = files.filter(isAudio).length;
   const others = files.length - imgs - audios;
   const Tag = onOpen ? "button" : "span";
