@@ -260,6 +260,33 @@ export function bankCandidates(tx: FinBankTx, invoices: FinInvoice[], fx: number
     .sort((a, b) => b.score - a.score);
 }
 
+/**
+ * Cuotas de salidas programadas (Vercel, Google Cloud, Albert, la LLC…) que
+ * puede ser este cargo: del mes anterior al siguiente, aún sin pago hecho.
+ * Importe con margen (cargos con tarjeta en otra moneda, importes aproximados).
+ */
+export function bankScheduledCandidates(tx: FinBankTx, scheduled: FinScheduled[], payments: FinPayment[], fx: number) {
+  const done = new Set(payments.filter((p) => p.scheduled_id && p.period).map((p) => `${p.scheduled_id}|${p.period}`));
+  const cp = new Set(words(`${tx.counterparty} ${tx.description} ${tx.note}`));
+  const month = tx.date.slice(0, 7);
+  const paid = Math.abs(tx.amount);
+  const out: { scheduled: FinScheduled; period: string; amountOk: boolean; nameOk: boolean; score: number }[] = [];
+  for (const sc of scheduled) {
+    if (sc.direction !== "salida") continue;
+    for (const period of occurrences(sc, addMonths(month, -1), addMonths(month, 1))) {
+      if (done.has(`${sc.id}|${period}`)) continue;
+      const target = sc.amount_usd ?? (fx ? (sc.amount_eur || 0) / fx : 0);
+      const diff = target ? Math.abs(target - paid) / target : 1;
+      const amountOk = sc.amount_usd != null ? diff <= 0.05 || Math.abs(target - paid) <= 3 : diff <= 0.15;
+      const nameOk = words(`${sc.counterparty} ${sc.concept}`).some((w) => cp.has(w));
+      const days = Math.abs(new Date(period).getTime() - new Date(tx.date).getTime()) / 864e5;
+      const score = (amountOk ? 2 : 0) + (nameOk ? 1.5 : 0) - Math.min(diff, 1) - days / 60;
+      out.push({ scheduled: sc, period, amountOk, nameOk, score });
+    }
+  }
+  return out.filter((x) => x.amountOk || x.nameOk).sort((a, b) => b.score - a.score);
+}
+
 export function parsePayment(r: Record<string, unknown>): FinPayment {
   return { ...(r as unknown as FinPayment), amount_eur: numOrNull(r.amount_eur), amount_usd: numOrNull(r.amount_usd) };
 }

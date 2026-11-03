@@ -12,6 +12,7 @@ import {
   addMonths,
   DEFAULT_PROBABILITY,
   bankCandidates,
+  bankScheduledCandidates,
   type FinBank,
   type FinBankTx,
   type FinInvoice,
@@ -1324,6 +1325,8 @@ const usd2 = (n: number) => "$" + Math.abs(n).toLocaleString("de-DE", { minimumF
 export function BankTxRow({
   tx,
   invoices,
+  scheduled,
+  payments,
   fx,
   onInvoice,
   onPayment,
@@ -1331,27 +1334,43 @@ export function BankTxRow({
 }: {
   tx: FinBankTx;
   invoices: FinInvoice[];
+  scheduled: FinScheduled[];
+  payments: FinPayment[];
   fx: number;
   onInvoice: (edit: { invoice?: FinInvoice; prefill?: Partial<FinInvoice>; bankTxId: string }) => void;
-  onPayment: (edit: { prefill: Partial<FinPayment>; bankTxId: string }) => void;
+  onPayment: (edit: { prefill: Partial<FinPayment>; closeScheduledId?: string; bankTxId: string }) => void;
   onSaved: () => void;
 }) {
   const incoming = tx.amount > 0;
   const candidates = useMemo(() => (incoming ? bankCandidates(tx, invoices, fx) : []), [incoming, tx, invoices, fx]);
-  const best = candidates[0]?.amountOk ? candidates[0].invoice.id : "";
+  const outCandidates = useMemo(
+    () => (incoming ? [] : bankScheduledCandidates(tx, scheduled, payments, fx)),
+    [incoming, tx, scheduled, payments, fx],
+  );
+  const best = incoming
+    ? candidates[0]?.amountOk ? candidates[0].invoice.id : ""
+    : outCandidates[0]?.nameOk ? `${outCandidates[0].scheduled.id}|${outCandidates[0].period}` : ""; // por nombre: el importe solo no basta
   const [choice, setChoice] = useState(best);
   const [busy, setBusy] = useState(false);
 
   function reconcile() {
     if (!incoming) {
+      const c = outCandidates.find((x) => `${x.scheduled.id}|${x.period}` === choice);
+      const sc = c?.scheduled;
       onPayment({
         bankTxId: tx.id,
+        // Si es una cuota programada, queda saldada (deja de salir como «sin confirmar»)
+        closeScheduledId: sc?.frequency === "unica" ? sc.id : undefined,
         prefill: {
           date: tx.date,
-          counterparty: tx.counterparty,
-          concept: tx.note || tx.description,
+          counterparty: sc?.counterparty || tx.counterparty,
+          concept: sc?.concept || tx.note || tx.description,
+          // Lo que ha salido de verdad del banco, en $
           amount_usd: Math.abs(tx.amount),
           amount_eur: null,
+          ...(sc
+            ? { kind: sc.kind, fin_project_id: sc.fin_project_id, scheduled_id: sc.id, period: c!.period }
+            : {}),
         },
       });
       return;
@@ -1427,8 +1446,19 @@ export function BankTxRow({
             ))}
           </select>
         )}
+        {!incoming && (
+          <select className="com-input fin-attn-select" value={choice} onChange={(e) => setChoice(e.target.value)}>
+            <option value="">Pago nuevo</option>
+            {outCandidates.map(({ scheduled: sc, period, amountOk }) => (
+              <option key={`${sc.id}|${period}`} value={`${sc.id}|${period}`}>
+                {amountOk ? "✓ " : ""}
+                {sc.counterparty || sc.concept} · {fFecha(period)} · {sc.amount_usd != null ? usd2(sc.amount_usd) : eur0(sc.amount_eur || 0)}
+              </option>
+            ))}
+          </select>
+        )}
         <button className="btn btn-sm" onClick={reconcile} disabled={busy}>
-          {incoming ? (choice ? "Marcar cobrada" : "Crear factura") : "Apuntar pago"}
+          {incoming ? (choice ? "Marcar cobrada" : "Crear factura") : choice ? "Marcar pagado" : "Apuntar pago"}
         </button>
         <button className="btn btn-sm" onClick={ignore} disabled={busy}>
           Ignorar

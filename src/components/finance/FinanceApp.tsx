@@ -292,12 +292,14 @@ export function FinanceApp() {
         {bankTx.length > 0 && (
           <div className="fin-attn">
             <b>🏦 {bankTx.length === 1 ? "1 movimiento del banco por revisar" : `${bankTx.length} movimientos del banco por revisar`}</b>
-            <span className="muted"> · entradas: ¿qué factura es? · salidas: apúntalas como pago hecho</span>
+            <span className="muted"> · entradas: ¿qué factura es? · salidas: ¿qué pago previsto es?</span>
             {bankTx.map((x) => (
               <BankTxRow
                 key={x.id}
                 tx={x}
                 invoices={invoices}
+                scheduled={scheduled}
+                payments={payments}
                 fx={fx}
                 onInvoice={setEditInvoice}
                 onPayment={setEditPayment}
