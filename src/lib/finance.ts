@@ -287,6 +287,47 @@ export function bankScheduledCandidates(tx: FinBankTx, scheduled: FinScheduled[]
   return out.filter((x) => x.amountOk || x.nameOk).sort((a, b) => b.score - a.score);
 }
 
+/**
+ * Movimientos del banco que encajan sin duda (nombre e importe, y ningún otro
+ * candidato igual de bueno): se cuadran solos, sin preguntar.
+ */
+export function bankAutoMatches(
+  txs: FinBankTx[],
+  invoices: FinInvoice[],
+  scheduled: FinScheduled[],
+  payments: FinPayment[],
+  fx: number,
+) {
+  const sure = <T extends { amountOk: boolean; nameOk: boolean }>(c: T[], key: (x: T) => string) => {
+    const good = c.filter((x) => x.amountOk && x.nameOk);
+    return good.length > 0 && new Set(good.map(key)).size === 1 ? good[0] : null;
+  };
+  const usedInv = new Set<string>();
+  const usedSched = new Set<string>();
+  const out: (
+    | { tx: FinBankTx; invoice: FinInvoice }
+    | { tx: FinBankTx; scheduled: FinScheduled; period: string }
+  )[] = [];
+  for (const tx of txs) {
+    if (tx.amount > 0) {
+      const c = sure(bankCandidates(tx, invoices, fx), (x) => x.invoice.id);
+      if (c && !usedInv.has(c.invoice.id)) {
+        usedInv.add(c.invoice.id);
+        out.push({ tx, invoice: c.invoice });
+      }
+    } else {
+      // Mismo programado en meses distintos cuenta como uno: se salda la cuota más cercana
+      const c = sure(bankScheduledCandidates(tx, scheduled, payments, fx), (x) => x.scheduled.id);
+      const key = c && `${c.scheduled.id}|${c.period}`;
+      if (c && key && !usedSched.has(key)) {
+        usedSched.add(key);
+        out.push({ tx, scheduled: c.scheduled, period: c.period });
+      }
+    }
+  }
+  return out;
+}
+
 export function parsePayment(r: Record<string, unknown>): FinPayment {
   return { ...(r as unknown as FinPayment), amount_eur: numOrNull(r.amount_eur), amount_usd: numOrNull(r.amount_usd) };
 }
@@ -1090,8 +1131,12 @@ export type StaleItem = {
  * los confirmados están "sin confirmar"; los probables, "fecha pasada:
  * actualizar o descartar". Las cuotas saltadas o cerradas no salen.
  */
-export function staleScheduled(input: ForecastInput, today = todayISO()) {
+export function staleScheduled(input: ForecastInput, today = todayISO(), bankGraceDays = 0) {
   const { fx, scheduled, payments, invoices } = input;
+  // Con el banco conectado, una salida no se pregunta hasta pasados unos días: se espera su cargo
+  const d = new Date(today);
+  d.setDate(d.getDate() - bankGraceDays);
+  const outCutoff = todayISO(d);
   const done = new Set<string>();
   payments.forEach((p) => p.scheduled_id && p.period && done.add(`${p.scheduled_id}|${p.period}`));
   invoices.forEach((f) => f.scheduled_id && f.scheduled_period && done.add(`${f.scheduled_id}|${f.scheduled_period}`));
@@ -1099,6 +1144,7 @@ export function staleScheduled(input: ForecastInput, today = todayISO()) {
   for (const sc of scheduled) {
     for (const period of occurrences(sc, sc.date.slice(0, 7), today.slice(0, 7))) {
       if (period >= today || done.has(`${sc.id}|${period}`)) continue;
+      if (sc.direction === "salida" && period > outCutoff) continue;
       out.push({ key: `${sc.id}|${period}`, scheduled: sc, period, eur: amountEur(sc, fx), probable: sc.certainty === "probable" });
     }
   }

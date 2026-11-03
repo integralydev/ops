@@ -29,6 +29,7 @@ import {
   parseScheduled,
   parseStripePending,
   parseBankTx,
+  bankAutoMatches,
   pctS,
   pendingActivations,
   projectMargin,
@@ -68,6 +69,9 @@ type Data = {
   opportunities: FinOpportunity[];
   opsProjects: OpsProject[];
 };
+
+// Días que se espera el cargo de una salida prevista antes de preguntar por ella
+const BANK_GRACE_DAYS = 7;
 
 type InvoiceEdit = { invoice?: FinInvoice; prefill?: Partial<FinInvoice>; closeScheduledId?: string; bankTxId?: string };
 type PaymentEdit = { payment?: FinPayment; prefill?: Partial<FinPayment>; closeScheduledId?: string; bankTxId?: string };
@@ -166,6 +170,73 @@ export function FinanceApp() {
     load();
   }, [load]);
 
+  // Lo que el banco confirma sin duda se cuadra solo; solo se pregunta lo dudoso
+  useEffect(() => {
+    if (!data || data.bankTx.length === 0) return;
+    const matches = bankAutoMatches(data.bankTx, data.invoices, data.scheduled, data.payments, data.fx);
+    if (matches.length === 0) return;
+    (async () => {
+      const supabase = createClient();
+      let n = 0;
+      for (const m of matches) {
+        const { tx } = m;
+        // Se reserva el movimiento primero: si otra pestaña ya lo ha cogido, no se apunta dos veces
+        const { data: claimed } = await supabase
+          .from("fin_bank_tx")
+          .update({ review: "conciliado" })
+          .eq("id", tx.id)
+          .eq("review", "pendiente")
+          .select("id");
+        if (!claimed?.length) continue;
+        const release = () => supabase.from("fin_bank_tx").update({ review: "pendiente" }).eq("id", tx.id);
+        if ("invoice" in m) {
+          const inv = m.invoice;
+          const { error } = await supabase
+            .from("fin_invoices")
+            .update({
+              status: "cobrada",
+              paid_date: tx.date,
+              usd_received: inv.usd != null && tx.amount < inv.usd ? tx.amount : inv.usd_received,
+            })
+            .eq("id", inv.id);
+          if (error) {
+            await release();
+            continue;
+          }
+          await supabase.from("fin_bank_tx").update({ fin_invoice_id: inv.id }).eq("id", tx.id);
+        } else {
+          const sc = m.scheduled;
+          const { data: saved, error } = await supabase
+            .from("fin_payments_out")
+            .insert({
+              date: tx.date,
+              concept: sc.concept,
+              counterparty: sc.counterparty,
+              amount_usd: Math.abs(tx.amount),
+              amount_eur: null,
+              kind: sc.kind,
+              fin_project_id: sc.fin_project_id,
+              scheduled_id: sc.id,
+              period: m.period,
+            })
+            .select("id")
+            .single();
+          if (error) {
+            await release();
+            continue;
+          }
+          if (sc.frequency === "unica") await supabase.from("fin_scheduled").update({ closed: true }).eq("id", sc.id);
+          await supabase.from("fin_bank_tx").update({ fin_payment_id: saved.id }).eq("id", tx.id);
+        }
+        n++;
+      }
+      if (n > 0) {
+        toast(n === 1 ? "1 movimiento del banco cuadrado solo" : `${n} movimientos del banco cuadrados solos`);
+        load();
+      }
+    })();
+  }, [data, load]);
+
   if (error) {
     return (
       <div className="content">
@@ -191,7 +262,7 @@ export function FinanceApp() {
   const cards = monthCards(data, 60, today);
   const nextCards = cards.filter((c) => !c.isCurrent);
   const detailCard = cards.find((c) => c.month === detailMonth);
-  const stale = staleScheduled(data, today);
+  const stale = staleScheduled(data, today, bank.synced_at ? BANK_GRACE_DAYS : 0);
   const staleConfirmed = stale.filter((x) => !x.probable);
   const staleProbable = stale.filter((x) => x.probable);
   const activations = pendingActivations(projects, recs);
