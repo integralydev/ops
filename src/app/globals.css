@@ -392,6 +392,10 @@ div.task-hero-btn{cursor:default;}
 .fin-badge.is-parcial{background:var(--accent-soft); color:var(--accent-dim);}
 .fin-badge.is-abono{background:var(--surface-2); color:var(--ink-faint); border:1px solid var(--border);}
 .fin-fx{display:flex; align-items:center; gap:6px; font-size:13px;}
+.fin-topbar-side{display:flex; align-items:center; gap:18px; flex-wrap:wrap; justify-content:flex-end;}
+.fin-bank{display:flex; align-items:center; gap:12px; padding:6px 6px 6px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
+.fin-bank-val{font-size:15px; font-weight:650; font-variant-numeric:tabular-nums;}
+.fin-bank-sub{font-size:11px; color:var(--ink-faint); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .fin-fx input{width:70px; padding:6px 8px; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px; text-align:right;}
 .fin-form-title{margin:16px 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.1em; font-weight:700; color:var(--ink-faint);}
 .fin-form-block{padding:10px 12px; margin-bottom:10px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2);}

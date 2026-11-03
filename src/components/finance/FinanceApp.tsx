@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/toast";
 import { FlowChart } from "./FlowChart";
 import { MonthDetail, UpcomingMonths } from "./UpcomingMonths";
-import { convertOpportunity, InvoiceModal, OpportunityModal, PaymentModal, ProjectModal, ReceivableModal, ScheduledModal, SkipModal, StripePendingRow } from "./forms";
+import { BankBox, BankTxRow, convertOpportunity, InvoiceModal, OpportunityModal, PaymentModal, ProjectModal, ReceivableModal, ScheduledModal, SkipModal, StripePendingRow } from "./forms";
 import {
   amountEur,
   computeKpis,
@@ -28,6 +28,7 @@ import {
   parseRecurrence,
   parseScheduled,
   parseStripePending,
+  parseBankTx,
   pctS,
   pendingActivations,
   projectMargin,
@@ -44,6 +45,8 @@ import {
   type FinRecurrence,
   type FinScheduled,
   type FinStripePending,
+  type FinBank,
+  type FinBankTx,
   type FinOpportunity,
   type OpportunityView,
   type OpsProject,
@@ -60,12 +63,14 @@ type Data = {
   scheduled: FinScheduled[];
   payments: FinPayment[];
   stripePending: FinStripePending[];
+  bank: FinBank;
+  bankTx: FinBankTx[];
   opportunities: FinOpportunity[];
   opsProjects: OpsProject[];
 };
 
-type InvoiceEdit = { invoice?: FinInvoice; prefill?: Partial<FinInvoice>; closeScheduledId?: string };
-type PaymentEdit = { payment?: FinPayment; prefill?: Partial<FinPayment>; closeScheduledId?: string };
+type InvoiceEdit = { invoice?: FinInvoice; prefill?: Partial<FinInvoice>; closeScheduledId?: string; bankTxId?: string };
+type PaymentEdit = { payment?: FinPayment; prefill?: Partial<FinPayment>; closeScheduledId?: string; bankTxId?: string };
 
 const REC_STATUS: Record<string, string> = {
   activa: "activa ✓",
@@ -108,8 +113,8 @@ export function FinanceApp() {
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [s, p, r, i, c, sc, po, sp, op, pj] = await Promise.all([
-      supabase.from("fin_settings").select("fx_usd_eur").eq("id", 1).maybeSingle(),
+    const [s, p, r, i, c, sc, po, sp, op, pj, bt] = await Promise.all([
+      supabase.from("fin_settings").select("fx_usd_eur, bank_balance_usd, bank_synced_at, bank_error").eq("id", 1).maybeSingle(),
       supabase.from("fin_projects").select("*").order("position").order("created_at"),
       supabase.from("fin_recurrences").select("*"),
       supabase.from("fin_invoices").select("*"),
@@ -119,8 +124,10 @@ export function FinanceApp() {
       supabase.from("fin_stripe_pending").select("*").order("paid_date"),
       supabase.from("fin_opportunities").select("*"),
       supabase.from("projects").select("id, name, status, clients(name)"),
+      // Solo lo ya asentado: lo que está en camino (pending) se revisa cuando llegue
+      supabase.from("fin_bank_tx").select("*").eq("review", "pendiente").eq("status", "sent").order("date"),
     ]);
-    const err = [s, p, r, i, c, sc, po, sp, op, pj].find((x) => x.error)?.error;
+    const err = [s, p, r, i, c, sc, po, sp, op, pj, bt].find((x) => x.error)?.error;
     if (err) {
       setError(err.message);
       return;
@@ -135,6 +142,12 @@ export function FinanceApp() {
       scheduled: (sc.data || []).map(parseScheduled),
       payments: (po.data || []).map(parsePayment),
       stripePending: (sp.data || []).map(parseStripePending),
+      bank: {
+        balance_usd: s.data?.bank_balance_usd == null ? null : Number(s.data.bank_balance_usd),
+        synced_at: s.data?.bank_synced_at ?? null,
+        error: s.data?.bank_error ?? null,
+      },
+      bankTx: (bt.data || []).map(parseBankTx),
       opportunities: (op.data || []).map(parseOpportunity),
       opsProjects: ((pj.data || []) as { id: string; name: string; status: string; clients: { name: string } | { name: string }[] | null }[]).map(
         (x) => ({
@@ -168,7 +181,7 @@ export function FinanceApp() {
     );
   }
 
-  const { fx, projects, recs, invoices, receivables, scheduled, payments, stripePending } = data;
+  const { fx, projects, recs, invoices, receivables, scheduled, payments, stripePending, bank, bankTx } = data;
   const today = todayISO();
   const curMonth = today.slice(0, 7);
   const k = computeKpis(projects, recs);
@@ -262,7 +275,10 @@ export function FinanceApp() {
           <h1>Finanzas</h1>
           <div className="topbar-sub">🔒 Solo propietarios · sesión verificada en dos pasos</div>
         </div>
-        <FxEditor fx={fx} onSaved={load} />
+        <div className="fin-topbar-side">
+          <BankBox bank={bank} onSaved={load} />
+          <FxEditor fx={fx} onSaved={load} />
+        </div>
       </div>
       <div className="content wide fin">
         {!integrity.ok && (
@@ -273,6 +289,23 @@ export function FinanceApp() {
         )}
 
         {/* Lo que pide atención */}
+        {bankTx.length > 0 && (
+          <div className="fin-attn">
+            <b>🏦 {bankTx.length === 1 ? "1 movimiento del banco por revisar" : `${bankTx.length} movimientos del banco por revisar`}</b>
+            <span className="muted"> · entradas: ¿qué factura es? · salidas: apúntalas como pago hecho</span>
+            {bankTx.map((x) => (
+              <BankTxRow
+                key={x.id}
+                tx={x}
+                invoices={invoices}
+                fx={fx}
+                onInvoice={setEditInvoice}
+                onPayment={setEditPayment}
+                onSaved={load}
+              />
+            ))}
+          </div>
+        )}
         {stripePending.length > 0 && (
           <div className="fin-attn">
             <b>💳 {stripePending.length === 1 ? "1 cobro de Stripe sin vincular" : `${stripePending.length} cobros de Stripe sin vincular`}</b>

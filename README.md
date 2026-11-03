@@ -147,3 +147,22 @@ secreto (SQL Editor):
 insert into fin_secrets (key, value) values ('stripe_webhook_secret', 'whsec_...')
 on conflict (key) do update set value = excluded.value;
 ```
+
+### Banco (Mercury)
+
+`fin_mercury_sync_core()` (SQL, extensión `http`) lee las cuentas y los
+movimientos de Mercury con un token de **solo lectura** guardado en
+`fin_secrets`. La lanza `pg_cron` cada día a las 7:00 UTC, y el botón
+«Sincronizar» de Finanzas por `fin_mercury_sync()` (solo propietarios con
+aal2). Los movimientos van a `fin_bank_tx` desde `fin_settings.bank_since`
+(lo anterior ya está en los libros) y quedan «pendiente» hasta que un
+propietario los concilia (entrada → factura cobrada, con lo realmente
+recibido en `usd_received`; salida → pago hecho) o los ignora. Los ingresos
+de Stripe se marcan `stripe` (ya entran por el webhook) y los traspasos entre
+cuentas o los fallidos, `ignorado`. Nada se marca como cobrado solo. Para
+poner o cambiar el token (SQL Editor):
+
+```sql
+insert into fin_secrets (key, value) values ('mercury_api_token', 'secret-token:mercury_production_...')
+on conflict (key) do update set value = excluded.value;
+```

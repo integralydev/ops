@@ -144,6 +144,29 @@ export type FinStripePending = {
   email: string;
 };
 
+/** Movimiento de Mercury (USD; negativo = salida). */
+export type FinBankTx = {
+  id: string;
+  account_name: string;
+  date: string;
+  amount: number;
+  kind: string;
+  status: string;
+  counterparty: string;
+  description: string;
+  note: string;
+  link: string;
+  review: "pendiente" | "conciliado" | "ignorado" | "stripe";
+  fin_invoice_id: string | null;
+  fin_payment_id: string | null;
+};
+
+export type FinBank = {
+  balance_usd: number | null;
+  synced_at: string | null;
+  error: string | null;
+};
+
 export type FinReceivable = {
   id: string;
   project: string;
@@ -202,6 +225,41 @@ export function parseScheduled(r: Record<string, unknown>): FinScheduled {
 export function parseStripePending(r: Record<string, unknown>): FinStripePending {
   return { ...(r as unknown as FinStripePending), amount: num(r.amount) };
 }
+export function parseBankTx(r: Record<string, unknown>): FinBankTx {
+  return { ...(r as unknown as FinBankTx), amount: num(r.amount) };
+}
+
+const words = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !["sl", "slu", "s.l", "llc", "inc", "the", "sociedad", "limitada"].includes(w));
+
+/**
+ * Facturas pendientes que pueden ser este ingreso, de más a menos probable.
+ * Importe: si la factura va en USD, lo recibido puede ser algo menos (comisión
+ * del banco intermediario); si va en €, se compara al cambio. Nombre: alguna
+ * palabra del cliente en el ordenante.
+ */
+export function bankCandidates(tx: FinBankTx, invoices: FinInvoice[], fx: number) {
+  const cp = new Set(words(`${tx.counterparty} ${tx.description} ${tx.note}`));
+  return invoices
+    .filter((i) => i.status === "pendiente" || i.status === "parcial")
+    .map((i) => {
+      const target = i.usd ?? (fx ? i.eur / fx : i.eur);
+      const diff = target ? (target - tx.amount) / target : 1;
+      // USD: puede llegar algo menos (comisión del wire: hasta 30$ o un 4%), nunca más de 1$ por encima; €: ±6% por el cambio
+      const short = target - tx.amount;
+      const amountOk = i.usd != null ? short >= -1 && short <= Math.max(30, target * 0.04) : Math.abs(diff) <= 0.06;
+      const nameOk = words(i.client).some((w) => cp.has(w));
+      const score = (amountOk ? 2 : 0) + (nameOk ? 1 : 0) - Math.min(Math.abs(diff), 1);
+      return { invoice: i, score, amountOk, nameOk };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
 export function parsePayment(r: Record<string, unknown>): FinPayment {
   return { ...(r as unknown as FinPayment), amount_eur: numOrNull(r.amount_eur), amount_usd: numOrNull(r.amount_usd) };
 }

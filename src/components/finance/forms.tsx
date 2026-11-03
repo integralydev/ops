@@ -11,6 +11,9 @@ import {
   fFecha,
   addMonths,
   DEFAULT_PROBABILITY,
+  bankCandidates,
+  type FinBank,
+  type FinBankTx,
   type FinInvoice,
   type FinOpportunity,
   type FinPayment,
@@ -392,6 +395,7 @@ export function InvoiceModal({
   invoice,
   prefill,
   closeScheduledId,
+  bankTxId,
   finProjects,
   onClose,
   onSaved,
@@ -401,6 +405,8 @@ export function InvoiceModal({
   prefill?: Partial<FinInvoice>;
   /** Programado único que queda cerrado al crear la factura. */
   closeScheduledId?: string;
+  /** Movimiento del banco que queda conciliado con esta factura. */
+  bankTxId?: string;
   finProjects: FinProject[];
   onClose: () => void;
   onSaved: () => void;
@@ -458,10 +464,12 @@ export function InvoiceModal({
         : {}),
     };
     const supabase = createClient();
-    const { error } = invoice
-      ? await supabase.from("fin_invoices").update(payload).eq("id", invoice.id)
-      : await supabase.from("fin_invoices").insert(payload);
+    const { data: saved, error } = invoice
+      ? await supabase.from("fin_invoices").update(payload).eq("id", invoice.id).select("id").single()
+      : await supabase.from("fin_invoices").insert(payload).select("id").single();
     if (!error && closeScheduledId) await supabase.from("fin_scheduled").update({ closed: true }).eq("id", closeScheduledId);
+    if (!error && bankTxId)
+      await supabase.from("fin_bank_tx").update({ review: "conciliado", fin_invoice_id: saved.id }).eq("id", bankTxId);
     setSaving(false);
     if (error) {
       toast("No se pudo guardar: " + error.message);
@@ -818,6 +826,7 @@ export function PaymentModal({
   payment,
   prefill,
   closeScheduledId,
+  bankTxId,
   finProjects,
   onClose,
   onSaved,
@@ -826,6 +835,8 @@ export function PaymentModal({
   /** "Marcar como pagado": datos del programado y su cuota. */
   prefill?: Partial<FinPayment>;
   closeScheduledId?: string;
+  /** Movimiento del banco que queda conciliado con este pago. */
+  bankTxId?: string;
   finProjects: FinProject[];
   onClose: () => void;
   onSaved: () => void;
@@ -858,10 +869,12 @@ export function PaymentModal({
       ...(!payment && prefill?.scheduled_id ? { scheduled_id: prefill.scheduled_id, period: prefill.period || null } : {}),
     };
     const supabase = createClient();
-    const { error } = payment
-      ? await supabase.from("fin_payments_out").update(payload).eq("id", payment.id)
-      : await supabase.from("fin_payments_out").insert(payload);
+    const { data: saved, error } = payment
+      ? await supabase.from("fin_payments_out").update(payload).eq("id", payment.id).select("id").single()
+      : await supabase.from("fin_payments_out").insert(payload).select("id").single();
     if (!error && closeScheduledId) await supabase.from("fin_scheduled").update({ closed: true }).eq("id", closeScheduledId);
+    if (!error && bankTxId)
+      await supabase.from("fin_bank_tx").update({ review: "conciliado", fin_payment_id: saved.id }).eq("id", bankTxId);
     setSaving(false);
     if (error) {
       toast("No se pudo guardar: " + error.message);
@@ -1299,4 +1312,162 @@ export async function convertOpportunity(view: OpportunityView, today: string) {
     .eq("id", o.id);
   toast("Pasado a confirmado. Revisa el coste de dev en Rentabilidad.");
   return true;
+}
+
+const usd2 = (n: number) => "$" + Math.abs(n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Movimiento de Mercury por revisar. Ingreso: se marca cobrada la factura que
+ * encaja (o se crea una). Salida: se apunta como pago hecho. Siempre a través
+ * del formulario de siempre, para revisar antes de guardar.
+ */
+export function BankTxRow({
+  tx,
+  invoices,
+  fx,
+  onInvoice,
+  onPayment,
+  onSaved,
+}: {
+  tx: FinBankTx;
+  invoices: FinInvoice[];
+  fx: number;
+  onInvoice: (edit: { invoice?: FinInvoice; prefill?: Partial<FinInvoice>; bankTxId: string }) => void;
+  onPayment: (edit: { prefill: Partial<FinPayment>; bankTxId: string }) => void;
+  onSaved: () => void;
+}) {
+  const incoming = tx.amount > 0;
+  const candidates = useMemo(() => (incoming ? bankCandidates(tx, invoices, fx) : []), [incoming, tx, invoices, fx]);
+  const best = candidates[0]?.amountOk ? candidates[0].invoice.id : "";
+  const [choice, setChoice] = useState(best);
+  const [busy, setBusy] = useState(false);
+
+  function reconcile() {
+    if (!incoming) {
+      onPayment({
+        bankTxId: tx.id,
+        prefill: {
+          date: tx.date,
+          counterparty: tx.counterparty,
+          concept: tx.note || tx.description,
+          amount_usd: Math.abs(tx.amount),
+          amount_eur: null,
+        },
+      });
+      return;
+    }
+    const inv = invoices.find((i) => i.id === choice);
+    if (inv) {
+      onInvoice({
+        bankTxId: tx.id,
+        invoice: {
+          ...inv,
+          status: "cobrada",
+          paid_date: tx.date,
+          // Lo que ha llegado de verdad: la diferencia con lo emitido sube sola a comisiones
+          usd_received: inv.usd != null && tx.amount < inv.usd ? tx.amount : inv.usd_received,
+        },
+      });
+    } else {
+      onInvoice({
+        bankTxId: tx.id,
+        prefill: {
+          client: tx.counterparty,
+          date: tx.date,
+          paid_date: tx.date,
+          usd: tx.amount,
+          eur: Math.round(tx.amount * fx * 100) / 100,
+          status: "cobrada",
+        },
+      });
+    }
+  }
+
+  async function ignore() {
+    setBusy(true);
+    const { error } = await createClient().from("fin_bank_tx").update({ review: "ignorado" }).eq("id", tx.id);
+    setBusy(false);
+    if (error) {
+      toast("No se pudo ignorar: " + error.message);
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <div className="fin-attn-row">
+      <span className="fin-move-date">{fFecha(tx.date)}</span>
+      <span>
+        {tx.counterparty || "Sin nombre"}
+        <span className="muted">
+          {tx.note ? ` · ${tx.note}` : tx.description && tx.description !== tx.counterparty ? ` · ${tx.description}` : ""}
+          {tx.link && (
+            <>
+              {" · "}
+              <a href={tx.link} target="_blank" rel="noreferrer">
+                ver en Mercury
+              </a>
+            </>
+          )}
+        </span>
+      </span>
+      <span className={"fin-move-amount " + (incoming ? "fin-in" : "fin-out")}>
+        {incoming ? "+" : "−"}
+        {usd2(tx.amount)}
+      </span>
+      <span className="fin-attn-acts">
+        {incoming && (
+          <select className="com-input fin-attn-select" value={choice} onChange={(e) => setChoice(e.target.value)}>
+            <option value="">Factura nueva</option>
+            {candidates.map(({ invoice: i, amountOk }) => (
+              <option key={i.id} value={i.id}>
+                {amountOk ? "✓ " : ""}
+                {i.client} · {i.number || i.concept} · {i.usd != null ? usd2(i.usd) : eur0(i.eur)}
+              </option>
+            ))}
+          </select>
+        )}
+        <button className="btn btn-sm" onClick={reconcile} disabled={busy}>
+          {incoming ? (choice ? "Marcar cobrada" : "Crear factura") : "Apuntar pago"}
+        </button>
+        <button className="btn btn-sm" onClick={ignore} disabled={busy}>
+          Ignorar
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/** Saldo de Mercury y botón para leer los movimientos al momento. */
+export function BankBox({ bank, onSaved }: { bank: FinBank; onSaved: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  async function sync() {
+    setBusy(true);
+    const { data, error } = await createClient().rpc("fin_mercury_sync");
+    setBusy(false);
+    const r = String(data ?? "");
+    if (error || r.startsWith("error")) toast("Mercury: " + (error?.message || r.slice(7)));
+    else if (r === "sin_token") toast("Falta el token de Mercury (ver README)");
+    else toast("Mercury al día · " + r.slice(5));
+    onSaved();
+  }
+
+  const when = bank.synced_at
+    ? new Date(bank.synced_at).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    : null;
+  return (
+    <div className="fin-bank">
+      <div>
+        <div className="fin-stat-label">🏦 Mercury</div>
+        <div className="fin-bank-val">{bank.balance_usd != null ? usd2(bank.balance_usd) : "Sin conectar"}</div>
+        <div className={"fin-bank-sub" + (bank.error ? " fin-red" : "")}>
+          {bank.error ? "Error: " + bank.error : when ? "leído el " + when : "aún no se ha leído"}
+        </div>
+      </div>
+      <button className="btn btn-sm" onClick={sync} disabled={busy}>
+        {busy ? "Leyendo…" : "Sincronizar"}
+      </button>
+    </div>
+  );
 }
