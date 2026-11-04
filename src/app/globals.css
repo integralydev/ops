@@ -1145,3 +1145,16 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .ms-more{display:block; width:100%; padding:10px 16px 6px; border:none; border-top:1px solid var(--border); background:none; color:var(--ink-soft); font-size:12.5px; cursor:pointer; text-align:left;}
 .ms-more:hover{color:var(--ink);}
 @media (hover:none){.ms-del{opacity:1;}}
+
+/* Arranque del proyecto (pestaña Arranque) */
+.arranque-list{list-style:none; margin:0; padding:0;}
+.arranque-step{display:grid; grid-template-columns:30px 1fr auto; gap:12px; padding:13px 4px; border-bottom:1px solid var(--border);}
+.arranque-step:last-child{border-bottom:none;}
+.arranque-num{width:26px; height:26px; border-radius:99px; display:flex; align-items:center; justify-content:center; font-size:12.4px; font-weight:700; border:1.5px solid var(--border); color:var(--ink-faint);}
+.arranque-step.is-next .arranque-num{border-color:var(--accent); color:var(--accent);}
+.arranque-step.is-done .arranque-num{background:var(--success-soft); border-color:var(--success); color:var(--success);}
+.arranque-title{font-weight:600; font-size:13.8px; color:var(--ink);}
+.arranque-step.is-done .arranque-title{color:var(--ink-soft);}
+.arranque-meta{font-size:12.4px; color:var(--ink-soft); margin-top:2px;}
+.arranque-note{font-size:12.6px; color:var(--ink); margin-top:6px; padding:6px 9px; border-radius:7px; background:var(--bg); white-space:pre-wrap;}
+@media (max-width:640px){ .arranque-step{grid-template-columns:30px 1fr;} .arranque-step > .row{grid-column:2;} }

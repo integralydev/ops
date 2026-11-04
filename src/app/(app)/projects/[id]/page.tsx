@@ -11,17 +11,21 @@ import { NotesTab } from "@/components/project/NotesTab";
 import { ScopeTab } from "@/components/project/ScopeTab";
 import { LinksTab } from "@/components/project/LinksTab";
 import { AccessTab } from "@/components/project/AccessTab";
+import { ArranqueTab } from "@/components/project/ArranqueTab";
 import { ContentTab } from "@/components/project/ContentTab";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { kindOf } from "@/lib/format";
 
-// Un proyecto de laboratorio no tiene alcance pactado ni accesos de terceros;
-// "Contenido" (ideas para publicar) es solo de laboratorio
-const LAB_HIDDEN_TABS: string[] = ["scope", "accesos"];
+// Un proyecto de laboratorio no tiene alcance pactado, ni arranque con cliente,
+// ni accesos de terceros; "Contenido" (ideas para publicar) es solo de laboratorio
+const LAB_HIDDEN_TABS: string[] = ["scope", "arranque", "accesos"];
+// Solo admin y director (también por RLS)
+const STAFF_TABS: string[] = ["arranque", "accesos"];
 const LAB_ONLY_TABS: string[] = ["contenido"];
 
 const TABS = [
   ["resumen", "Resumen"],
+  ["arranque", "Arranque"], // solo admin y director
   ["scope", "Scope"],
   ["tareas", "Tareas"],
   ["contenido", "Contenido"], // solo laboratorio
@@ -99,7 +103,7 @@ export default function ProjectDetailPage() {
         <div className="tabs">
           {TABS.filter(
             ([key]) =>
-              (key !== "accesos" || isStaff) &&
+              (!STAFF_TABS.includes(key) || isStaff) &&
               !(isLab && LAB_HIDDEN_TABS.includes(key)) &&
               !(!isLab && LAB_ONLY_TABS.includes(key)),
           ).map(([key, label]) => (
@@ -122,6 +126,8 @@ export default function ProjectDetailPage() {
           <TasksTab project={project} />
         ) : tab === "archivos" ? (
           <FilesTab project={project} />
+        ) : tab === "arranque" && isStaff ? (
+          <ArranqueTab project={project} />
         ) : tab === "accesos" && isStaff ? (
           <AccessTab project={project} />
         ) : tab === "enlaces" ? (

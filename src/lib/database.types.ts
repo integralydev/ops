@@ -82,6 +82,8 @@ export interface Project {
   scope_closed_at: string | null;
   scope_closed_by: string | null;
   scope_source_file_id: string | null;
+  /** Qué se vendió para arrancar: implementación (camino A) o diagnóstico (camino B). */
+  onboarding_track: OnboardingTrack | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -296,6 +298,29 @@ export interface ProjectAccess {
   revoked_by: string | null;
   revoke_how: string;
   created_by: string | null;
+  created_at: string;
+}
+
+export type OnboardingTrack = "implementacion" | "diagnostico";
+export type OnboardingStepKey = "propuesta" | "contrato" | "primer_pago" | "reunion_inicio";
+export type OnboardingChannel = "portal" | "correo" | "whatsapp" | "llamada" | "en_persona" | "stripe" | "banco" | "otro";
+
+// Paso del arranque de un proyecto (solo admin y director). Sin fila = pendiente.
+export interface OnboardingStep {
+  id: string;
+  project_id: string;
+  step: OnboardingStepKey;
+  /** Fecha en que quedó hecho; null = pendiente. */
+  done_on: string | null;
+  done_by: string | null;
+  channel: OnboardingChannel | null;
+  note: string;
+  /** Documento de respaldo, de Archivos del proyecto. */
+  file_id: string | null;
+  /** Solo reunión de inicio: cuándo está agendada. */
+  scheduled_at: string | null;
+  updated_by: string | null;
+  updated_at: string;
   created_at: string;
 }
 

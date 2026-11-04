@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { ContentIdea, TaskComment, FileRow, Note, Project, ProjectAccess, ProjectLink, ScopeItem, Task } from "@/lib/database.types";
+import type { ContentIdea, OnboardingStep, TaskComment, FileRow, Note, Project, ProjectAccess, ProjectLink, ScopeItem, Task } from "@/lib/database.types";
 
 export function useProject(id: string) {
   const [project, setProject] = useState<Project | null | undefined>(undefined); // undefined = loading
@@ -54,6 +54,7 @@ function useSubcollection<T extends { id: string }>(table:
     | "project_links"
     | "project_accesses"
     | "content_ideas"
+    | "project_onboarding_steps"
     | "task_comments",
   projectId: string, orderCol = "created_at") {
   const [rows, setRows] = useState<Record<string, T>>({});
@@ -152,4 +153,8 @@ export function useContentIdeas(projectId: string) {
 /** Solo admin y director (RLS): usarlo únicamente en pantallas de staff. */
 export function useAccesses(projectId: string) {
   return useSubcollection<ProjectAccess>("project_accesses", projectId);
+}
+/** Registro del arranque. Solo admin y director (RLS): usarlo únicamente en pantallas de staff. */
+export function useOnboardingSteps(projectId: string) {
+  return useSubcollection<OnboardingStep>("project_onboarding_steps", projectId);
 }
