@@ -78,6 +78,12 @@ const PATHS = {
       <path d="M14 3v6h6M8 13h8M8 17h5" />
     </>
   ),
+  lock: (
+    <>
+      <rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </>
+  ),
   bulb: <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" />,
 } as const;
 
