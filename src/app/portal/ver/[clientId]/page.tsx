@@ -13,5 +13,8 @@ export default async function PortalPreviewPage({ params }: { params: Promise<{ 
   const { data } = await supabase.rpc("portal_home", { p_client: clientId });
   const home = data as PortalHome | null;
   if (!home?.client) redirect("/dashboard");
+  // Facturas: la base de datos solo se las devuelve a los propietarios
+  const { data: billing } = await supabase.rpc("portal_billing", { p_client: clientId });
+  home.billing = (billing as PortalHome["billing"]) ?? null;
   return <PortalView data={home} />;
 }

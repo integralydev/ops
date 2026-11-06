@@ -18,6 +18,10 @@ export default async function PortalPage() {
 
   const { data } = await supabase.rpc("portal_home");
   const home = data as PortalHome | null;
+  if (home?.client) {
+    const { data: billing } = await supabase.rpc("portal_billing");
+    home.billing = (billing as PortalHome["billing"]) ?? null;
+  }
   if (!home?.client) {
     return (
       <div className="center-screen">

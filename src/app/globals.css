@@ -1413,6 +1413,22 @@ body{font-size:14.5px;}
 .portal-file-name{color:var(--ink); font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .portal-person{display:flex; align-items:center; gap:12px; padding:8px 0;}
 .portal-person-name{font-weight:600; font-size:14.5px;}
+.portal-bill-sum{display:grid; grid-template-columns:1fr 1fr; gap:14px; background:var(--surface-2); border-radius:var(--radius-sm); padding:14px 16px;}
+.portal-bill-line{font-size:14.5px; margin-top:4px;}
+.portal-bill-line b{font-size:17px; letter-spacing:-.01em;}
+.portal-invoice{display:grid; grid-template-columns:1fr auto auto 64px; align-items:center; gap:14px; padding:10px 0; border-top:1px solid var(--border);}
+.portal-invoice .btn{justify-self:end;}
+.portal-invoice .portal-file-name{white-space:normal;}
+.portal-inv-amount{font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;}
+.portal-inv-st{font-size:12px; font-weight:600; padding:3px 9px; border-radius:99px; white-space:nowrap; background:var(--surface-2); color:var(--ink-soft);}
+.portal-inv-st.st-pendiente,.portal-inv-st.st-parcial{background:var(--warning-soft); color:var(--warning);}
+.portal-inv-st.st-cobrada{background:var(--success-soft); color:var(--success);}
+@media (max-width:640px){
+  .portal-bill-sum{grid-template-columns:1fr;}
+  .portal-invoice{grid-template-columns:1fr auto auto; row-gap:6px; column-gap:10px;}
+  .portal-invoice .portal-file-body{grid-column:1 / -1;}
+  .portal-inv-nopdf{display:none;}
+}
 .portal-refer{border:1.5px solid var(--accent-soft);}
 .portal-refer-text{color:var(--ink-soft); font-size:14.5px; line-height:1.6; margin:0 0 14px;}
 .portal-refer-link{display:flex; align-items:center; gap:10px; background:var(--surface-2); border-radius:var(--radius-sm); padding:8px 8px 8px 14px;}

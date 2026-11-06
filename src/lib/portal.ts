@@ -29,11 +29,30 @@ export interface PortalProject {
   files: PortalFile[];
 }
 
+export interface PortalInvoice {
+  id: string;
+  number: string;
+  concept: string;
+  date: string;
+  kind: "implementacion" | "mensualidad";
+  status: "cobrada" | "pendiente" | "parcial" | "abono";
+  eur: number;
+  usd: number | null;
+  pdf: boolean;
+}
+
+export interface PortalBilling {
+  invoices: PortalInvoice[];
+  fees: { title: string; eur: number }[];
+}
+
 export interface PortalHome {
   preview: boolean;
   me: string | null;
   client: { id: string; name: string; referral_code: string | null; lang: PortalLang };
   projects: PortalProject[];
+  /** Facturas y pagos (null si no toca enseñarlas: p. ej. vista previa de alguien que no es propietario) */
+  billing?: PortalBilling | null;
 }
 
 /** Fases en las que el cliente ve el proyecto (igual que portal_visible_status en SQL). */
@@ -87,6 +106,16 @@ export const T = {
     preview: "Vista previa: así lo ve el cliente",
     back: "Volver al OPS",
     updated: "Actualizado",
+    billing: "Facturas y pagos",
+    pendingTitle: "Pendiente de pago",
+    pendingNone: "Estás al día: no tienes nada pendiente.",
+    fee: "Tu cuota mensual",
+    perMonth: "/mes",
+    invoices: "Facturas",
+    invoicesEmpty: "Aquí aparecerán tus facturas.",
+    st: { cobrada: "Pagada", pendiente: "Pendiente", parcial: "Pago parcial", abono: "Abono" },
+    payNote: "Los datos para el pago están en cada factura.",
+    download: "PDF",
   },
   ca: {
     hello: (n: string) => `Hola, ${n}`,
@@ -114,5 +143,15 @@ export const T = {
     preview: "Vista prèvia: així ho veu el client",
     back: "Tornar a l'OPS",
     updated: "Actualitzat",
+    billing: "Factures i pagaments",
+    pendingTitle: "Pendent de pagament",
+    pendingNone: "Estàs al dia: no tens res pendent.",
+    fee: "La teva quota mensual",
+    perMonth: "/mes",
+    invoices: "Factures",
+    invoicesEmpty: "Aquí apareixeran les teves factures.",
+    st: { cobrada: "Pagada", pendiente: "Pendent", parcial: "Pagament parcial", abono: "Abonament" },
+    payNote: "Les dades per al pagament són a cada factura.",
+    download: "PDF",
   },
 } as const;

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
-import { portalFileUrl } from "@/app/portal/actions";
+import { portalFileUrl, portalInvoiceUrl } from "@/app/portal/actions";
 import {
   CONTACT_EMAIL,
   PORTAL_PATH,
@@ -14,8 +14,10 @@ import {
   T,
   portalStep,
   referralLink,
+  type PortalBilling,
   type PortalFile,
   type PortalHome,
+  type PortalInvoice,
   type PortalProject,
 } from "@/lib/portal";
 
@@ -78,6 +80,10 @@ export function PortalView({ data }: { data: PortalHome }) {
           <div className="card pad portal-empty">{t.empty}</div>
         ) : (
           data.projects.map((p) => <ProjectBlock key={p.id} p={p} t={t} lang={lang} showName={many} />)
+        )}
+
+        {data.billing && (data.billing.invoices.length > 0 || data.billing.fees.length > 0) && (
+          <Billing b={data.billing} t={t} lang={lang} />
         )}
 
         {signed && data.client.referral_code && <Referral code={data.client.referral_code} t={t} />}
@@ -162,6 +168,116 @@ function ProjectBlock({ p, t, lang, showName }: { p: PortalProject; t: Texts; la
         </div>
       </div>
     </section>
+  );
+}
+
+function fmtMoney(inv: { eur: number; usd: number | null }, lang: "es" | "ca") {
+  void lang; // mismo formato en los dos idiomas: 1.621,58
+  // A mano: toLocaleString("es-ES") no pone el punto en 4 cifras (1621,58)
+  const n = (v: number) => {
+    const [int, dec] = (Math.round(v * 100) / 100).toFixed(v % 1 ? 2 : 0).split(".");
+    return int.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (dec ? "," + dec : "");
+  };
+  const v = Number(inv.usd != null ? inv.usd : inv.eur);
+  const sign = v < 0 ? "−" : "";
+  return inv.usd != null ? `${sign}$${n(Math.abs(v))}` : `${sign}${n(Math.abs(v))} €`;
+}
+
+/** Concepto legible: las facturas de Stripe llegan como "1 × Producto (at €350.00 / month)". */
+function cleanConcept(c: string) {
+  return c
+    .replace(/^\d+\s*×\s*/, "")
+    .replace(/\s*\(at [^)]*\)\s*$/i, "")
+    .replace(/\s*\(Stripe\)\s*$/i, "")
+    .trim();
+}
+
+function Billing({ b, t, lang }: { b: PortalBilling; t: Texts; lang: "es" | "ca" }) {
+  const pending = b.invoices.filter((i) => i.status === "pendiente" || i.status === "parcial");
+  return (
+    <section className="card pad portal-billing">
+      <div className="portal-h3">
+        <span className="ico ico-sm ico-p">
+          <Icon name="file" size={16} />
+        </span>
+        {t.billing}
+      </div>
+
+      <div className="portal-bill-sum">
+        <div>
+          <div className="next-label">{t.pendingTitle}</div>
+          {pending.length === 0 ? (
+            <div className="portal-small">{t.pendingNone}</div>
+          ) : (
+            <>
+              {pending.map((i) => (
+                <div key={i.id} className="portal-bill-line">
+                  <b>{fmtMoney(i, lang)}</b>{" "}
+                  <span className="muted">
+                    · {i.number} · {fmtDay(i.date, lang)}
+                  </span>
+                </div>
+              ))}
+              <div className="muted portal-small">{t.payNote}</div>
+            </>
+          )}
+        </div>
+        {b.fees.length > 0 && (
+          <div>
+            <div className="next-label">{t.fee}</div>
+            {b.fees.map((f, k) => (
+              <div key={k} className="portal-bill-line">
+                <b>{fmtMoney({ eur: f.eur, usd: null }, lang)}</b>
+                <span className="muted">{t.perMonth}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="next-label" style={{ marginTop: 18 }}>
+        {t.invoices}
+      </div>
+      {b.invoices.length === 0 ? (
+        <div className="muted portal-small">{t.invoicesEmpty}</div>
+      ) : (
+        b.invoices.map((i) => <InvoiceRow key={i.id} i={i} t={t} lang={lang} />)
+      )}
+    </section>
+  );
+}
+
+function InvoiceRow({ i, t, lang }: { i: PortalInvoice; t: Texts; lang: "es" | "ca" }) {
+  const [opening, setOpening] = useState(false);
+  async function open() {
+    // La pestaña se abre ya (si no, el navegador la bloquea) y luego se le pone la URL
+    const win = window.open("", "_blank");
+    setOpening(true);
+    const r = await portalInvoiceUrl(i.id);
+    setOpening(false);
+    if ("url" in r && r.url) {
+      if (win) win.location.href = r.url;
+      else window.location.href = r.url;
+    } else win?.close();
+  }
+  return (
+    <div className="portal-invoice">
+      <div className="portal-file-body">
+        <div className="portal-file-name">{cleanConcept(i.concept || "") || i.number}</div>
+        <div className="muted portal-small">
+          {i.number} · {fmtDay(i.date, lang)}
+        </div>
+      </div>
+      <span className="portal-inv-amount">{fmtMoney(i, lang)}</span>
+      <span className={"portal-inv-st st-" + i.status}>{t.st[i.status]}</span>
+      {i.pdf ? (
+        <button className="btn btn-sm" onClick={open} disabled={opening}>
+          {opening ? t.opening : t.download}
+        </button>
+      ) : (
+        <span className="portal-inv-nopdf" />
+      )}
+    </div>
   );
 }
 

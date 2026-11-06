@@ -203,3 +203,14 @@ export async function portalFileUrl(fileId: string) {
   if (error || !data) return { error: "No disponible" };
   return { url: data.signedUrl };
 }
+
+/** URL temporal para abrir el PDF de una factura (comprueba antes que es de quien la pide). */
+export async function portalInvoiceUrl(invoiceId: string) {
+  const supabase = await createClient();
+  const { data: path } = await supabase.rpc("portal_invoice_path", { iid: invoiceId });
+  if (!path || typeof path !== "string") return { error: "No disponible" };
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from("invoices").createSignedUrl(path, 300);
+  if (error || !data) return { error: "No disponible" };
+  return { url: data.signedUrl };
+}
