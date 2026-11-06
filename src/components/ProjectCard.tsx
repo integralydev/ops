@@ -2,39 +2,63 @@
 
 import Link from "next/link";
 import { useAppData } from "@/components/app-data";
-import { statusLabel } from "@/lib/format";
+import { Avatar } from "@/components/Avatar";
+import { Icon } from "@/components/Icon";
+import { kindOf, statusLabel } from "@/lib/format";
+import { CLIENT_PATH, LAB_PATH, phaseIndex, phaseLook } from "@/lib/phase";
 import type { Project, ProjectLink } from "@/lib/database.types";
 
+// Tarjeta de proyecto con el lenguaje del portal de cliente: icono de la fase,
+// nombre grande, barra de progreso por fases y el próximo paso en una línea.
 export function ProjectCard({ project, featured }: { project: Project; featured?: ProjectLink }) {
   const { clients, nameFor } = useAppData();
   const client = project.client_id ? clients[project.client_id] : null;
+  const lab = kindOf(project) === "laboratorio";
+  const look = phaseLook(project.status);
+  const path = lab ? LAB_PATH : CLIENT_PATH;
+  const at = phaseIndex(project.status, lab);
+  const people = [project.owner_id, ...(project.developer_ids || [])].filter(
+    (x, i, a): x is string => !!x && a.indexOf(x) === i,
+  );
 
   return (
     <Link href={`/projects/${project.id}`} className="card proj-card">
       <div className="proj-top">
-        <div>
+        <div className={`ico ico-${look.tone}`}>
+          <Icon name={look.icon} size={20} />
+        </div>
+        <div className="proj-titles">
           <div className="proj-name">{client ? client.name : project.name}</div>
-          <div className="proj-client">{client ? project.name : project.kind === "laboratorio" ? "🧪 Laboratorio" : "Sin cliente"}</div>
+          <div className="proj-client">{client ? project.name : lab ? "Laboratorio" : "Sin cliente"}</div>
         </div>
-        <span className={`badge badge-${project.status}`}>
-          <span className="badge-dot" />
-          {statusLabel(project.status)}
-        </span>
       </div>
-      {project.next_step ? (
-        <div className="next-step">
-          <b>Próximo paso · </b>
-          {project.next_step}
+
+      <div className="proj-phase">
+        <div className="phase-seg" aria-hidden>
+          {path.map((p, i) => (
+            <i key={p.value} className={i < at ? "done" : i === at ? "now" : ""} />
+          ))}
         </div>
-      ) : (
-        <div className="next-step muted">Sin próximo paso definido</div>
-      )}
+        <span className={`pill pill-${look.tone}`}>{statusLabel(project.status)}</span>
+      </div>
+
+      <div className={"proj-next" + (project.next_step ? "" : " empty-next")}>
+        <Icon name="arrow" size={15} />
+        <span>{project.next_step || "Sin próximo paso"}</span>
+      </div>
+
       <div className="proj-foot">
-        {featured ? (
+        <div className="avatars">
+          {people.slice(0, 4).map((id) => (
+            <span key={id} title={nameFor(id)}>
+              <Avatar id={id} name={nameFor(id)} size={24} />
+            </span>
+          ))}
+        </div>
+        {featured && (
           <span
             role="link"
-            className="demo-link"
-            style={{ marginLeft: 0 }}
+            className="demo-chip"
             onClick={(e) => {
               // La tarjeta entera ya es un enlace: abrimos la demo sin navegar al proyecto
               e.preventDefault();
@@ -42,14 +66,9 @@ export function ProjectCard({ project, featured }: { project: Project; featured?
               window.open(featured.url, "_blank", "noopener,noreferrer");
             }}
           >
-            {featured.label} ↗
+            {featured.label} <Icon name="external" size={13} />
           </span>
-        ) : (
-          <span />
         )}
-        <span className="muted" style={{ fontSize: 11.8 }}>
-          Encargado: {nameFor(project.owner_id)}
-        </span>
       </div>
     </Link>
   );

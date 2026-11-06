@@ -11,6 +11,8 @@ import { Milestones } from "@/components/Milestones";
 import { useRouter } from "next/navigation";
 import { LAB_STATUSES, PROJECT_STATUSES, kindOf, statusLabel } from "@/lib/format";
 import { pickGreeting } from "@/lib/greetings";
+import { Icon, type IconName } from "@/components/Icon";
+import { phaseLook } from "@/lib/phase";
 
 // Saludo y fecha se calculan solo en el navegador (hora local de quien entra)
 // y una vez por carga de página, para que no cambien en cada render.
@@ -52,42 +54,43 @@ export default function DashboardPage() {
   // "En curso": todo lo que no está pausado, cerrado ni ya en post go-live
   const active = [...commercial, ...inDev].sort((a, b) => order(a.status) - order(b.status));
 
-  const stats: { value: number; label: string; href?: string }[] = [
-    { value: commercial.length, label: "En preventa", href: "/projects" },
-    { value: inDev.length, label: "En desarrollo o testing", href: "/projects" },
-    { value: live.length, label: "En producción", href: "/projects" },
-    ...(isStaff ? [{ value: activeClients.length, label: "Clientes activos", href: "/clients" }] : []),
-    { value: Object.keys(team).length, label: "Personas en el equipo" },
+  // Cuatro cifras, grandes y con icono: lo que se ve de un vistazo
+  const stats: { value: number; label: string; href: string; icon: IconName; tone: string }[] = [
+    { value: commercial.length, label: "En preventa", href: "/projects", icon: "spark", tone: "p" },
+    { value: inDev.length, label: "En desarrollo", href: "/projects", icon: "code", tone: "in" },
+    { value: live.length, label: "En producción", href: "/projects", icon: "pulse", tone: "ok" },
+    ...(isStaff
+      ? [{ value: activeClients.length, label: "Clientes", href: "/clients", icon: "building" as IconName, tone: "w" }]
+      : []),
   ];
+  void team;
 
   return (
     <>
       <div className="topbar dash-hero">
         <div>
           <h1>{greeting}</h1>
-          <div className="topbar-sub">{today ? `${today} · Así va Integraly` : "Así va Integraly"}</div>
+          <div className="topbar-sub">{today || "Así va Integraly"}</div>
         </div>
         {isStaff && (
           <button className="btn btn-primary" onClick={() => setShowNew(true)}>
-            + Nuevo proyecto
+            <Icon name="plus" size={16} /> Nuevo proyecto
           </button>
         )}
       </div>
       <div className="content wide">
         <div className="dash-stats">
-          {stats.map((s) =>
-            s.href ? (
-              <Link key={s.label} href={s.href} className="card dash-stat">
-                <b>{s.value}</b>
-                <span>{s.label}</span>
-              </Link>
-            ) : (
-              <div key={s.label} className="card dash-stat">
+          {stats.map((s) => (
+            <Link key={s.label} href={s.href} className="card dash-stat">
+              <div className={`ico ico-${s.tone}`}>
+                <Icon name={s.icon} size={20} />
+              </div>
+              <div>
                 <b>{s.value}</b>
                 <span>{s.label}</span>
               </div>
-            ),
-          )}
+            </Link>
+          ))}
         </div>
 
         <div className="dash-grid">
@@ -120,7 +123,7 @@ export default function DashboardPage() {
               <>
                 <div className="dash-section-head" style={{ marginTop: 26 }}>
                   <div className="section-title">
-                    🧪 Laboratorio<span className="dash-count">{lab.length}</span>
+                    Laboratorio<span className="dash-count">{lab.length}</span>
                   </div>
                   <Link href="/projects?tipo=laboratorio" className="section-link">
                     Ver todos →
@@ -129,12 +132,12 @@ export default function DashboardPage() {
                 <div className="card lab-list">
                   {lab.map((p) => (
                     <Link key={p.id} href={`/projects/${p.id}`} className="lab-row">
+                      <span className={`ico ico-sm ico-${phaseLook(p.status).tone}`}>
+                        <Icon name={phaseLook(p.status).icon} size={16} />
+                      </span>
                       <span className="lab-name">{p.name}</span>
                       {p.next_step && <span className="lab-next">{p.next_step}</span>}
-                      <span className={`badge badge-${p.status}`}>
-                        <span className="badge-dot" />
-                        {statusLabel(p.status)}
-                      </span>
+                      <span className={`pill pill-${phaseLook(p.status).tone}`}>{statusLabel(p.status)}</span>
                     </Link>
                   ))}
                 </div>

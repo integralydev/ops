@@ -10,11 +10,14 @@ import { fmtDate, fmtDateTime, fmtRelative, kindOf, statusLabel } from "@/lib/fo
 import { useNotes } from "@/lib/hooks/useProjectDetail";
 import { UpdateImages } from "@/components/project/UpdateImages";
 import type { Project } from "@/lib/database.types";
+import { Icon } from "@/components/Icon";
+import { CLIENT_PATH, LAB_PATH, phaseIndex, phaseLook } from "@/lib/phase";
 
 export function ResumenTab({ project }: { project: Project }) {
   const { me, isStaff, clients, nameFor } = useAppData();
   const [nextStep, setNextStep] = useState(project.next_step || "");
   const [saving, setSaving] = useState(false);
+  const [editingStep, setEditingStep] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -63,32 +66,81 @@ export function ResumenTab({ project }: { project: Project }) {
       toast("No se pudo guardar: " + error.message);
       return;
     }
+    setEditingStep(false);
     toast("Próximo paso actualizado");
   }
 
+  const lab = kindOf(project) === "laboratorio";
+  const path = lab ? LAB_PATH : CLIENT_PATH;
+  const at = phaseIndex(project.status, lab);
+  const look = phaseLook(project.status);
+
   return (
+    <>
+    <div className="card pad journey">
+      <div className="journey-head">
+        <h2>Recorrido</h2>
+        <span className={`pill pill-${look.tone}`}>{statusLabel(project.status)}</span>
+      </div>
+      {at >= 0 ? (
+        <div className="stepper">
+          {path.map((p, i) => {
+            const c = i < at ? "done" : i === at ? "now" : "";
+            return (
+              <div key={p.value} className={"st " + c}>
+                <div className="c">{c === "done" ? <Icon name="check" size={15} /> : i + 1}</div>
+                {p.short}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="muted">Fuera del recorrido: {statusLabel(project.status).toLowerCase()}.</div>
+      )}
+    </div>
+
     <div className="grid two-col-main">
       <div className="card pad">
-        <div className="row between" style={{ marginBottom: 14 }}>
-          <span className={`badge badge-${project.status}`}>
-            <span className="badge-dot" />
-            {statusLabel(project.status)}
-          </span>
+        <div className="next-hero">
+          <div className="ico ico-p">
+            <Icon name="flag" size={20} />
+          </div>
+          <div className="next-body">
+            <div className="next-label">Próximo paso</div>
+            {editingStep ? (
+              <>
+                <div className="field" style={{ marginBottom: 10 }}>
+                  <textarea
+                    rows={2}
+                    value={nextStep}
+                    onChange={(e) => setNextStep(e.target.value)}
+                    placeholder="¿Qué toca hacer ahora en este proyecto?"
+                    autoFocus
+                  />
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn btn-sm btn-primary" onClick={saveNextStep} disabled={saving}>
+                    {saving ? "Guardando…" : "Guardar"}
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => {
+                      setNextStep(project.next_step || "");
+                      setEditingStep(false);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button className="next-text" onClick={() => setEditingStep(true)} title="Cambiar el próximo paso">
+                <span>{project.next_step || "Añade qué toca ahora"}</span>
+                <Icon name="pencil" size={15} />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="section-title" style={{ marginTop: 0 }}>
-          Próximo paso
-        </div>
-        <div className="field">
-          <textarea
-            rows={2}
-            value={nextStep}
-            onChange={(e) => setNextStep(e.target.value)}
-            placeholder="¿Qué toca hacer ahora en este proyecto?"
-          />
-        </div>
-        <button className="btn btn-sm" onClick={saveNextStep} disabled={saving}>
-          {saving ? "Guardando…" : "Guardar próximo paso"}
-        </button>
 
         <div className="row between section-title">
           <span>Última actualización</span>
@@ -217,5 +269,6 @@ export function ResumenTab({ project }: { project: Project }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

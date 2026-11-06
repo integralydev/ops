@@ -9,6 +9,7 @@ import { ColorPickerModal } from "@/components/ColorPickerModal";
 import { AppDataProvider, useAppData } from "@/components/app-data";
 import { Toaster } from "@/components/toast";
 import { ROLE_LABELS, type Role } from "@/lib/database.types";
+import { Icon, type IconName } from "@/components/Icon";
 
 function NavItem({
   href,
@@ -17,7 +18,7 @@ function NavItem({
   onNavigate,
 }: {
   href: string;
-  icon: string;
+  icon: IconName;
   label: string;
   onNavigate?: () => void;
 }) {
@@ -25,7 +26,7 @@ function NavItem({
   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
   return (
     <Link href={href} className={"nav-item" + (active ? " active" : "")} onClick={onNavigate} title={label}>
-      <span className="nav-icon">{icon}</span>
+      <span className="nav-icon"><Icon name={icon} /></span>
       <span className="nav-label">{label}</span>
     </Link>
   );
@@ -80,37 +81,37 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         {/* El rol comercial solo entra en Comercial */}
         {!isComercial && (
           <>
-            <NavItem href="/dashboard" icon="🏠" label="Inicio" onNavigate={() => setOpen(false)} />
-            <NavItem href="/projects" icon="📁" label="Proyectos" onNavigate={() => setOpen(false)} />
+            <NavItem href="/dashboard" icon="home" label="Inicio" onNavigate={() => setOpen(false)} />
+            <NavItem href="/projects" icon="folder" label="Proyectos" onNavigate={() => setOpen(false)} />
           </>
         )}
-        {hasSales && <NavItem href="/comercial" icon="🎯" label="Comercial" onNavigate={() => setOpen(false)} />}
+        {hasSales && <NavItem href="/comercial" icon="target" label="Comercial" onNavigate={() => setOpen(false)} />}
         {isStaff && (
           <>
             <div className="nav-section">Administración</div>
-            <NavItem href="/clients" icon="🧾" label="Clientes" onNavigate={() => setOpen(false)} />
-            {isAdmin && <NavItem href="/team" icon="👥" label="Equipo" onNavigate={() => setOpen(false)} />}
-            {me.isOwner && <NavItem href="/finanzas" icon="💶" label="Finanzas" onNavigate={() => setOpen(false)} />}
+            <NavItem href="/clients" icon="building" label="Clientes" onNavigate={() => setOpen(false)} />
+            {isAdmin && <NavItem href="/team" icon="users" label="Equipo" onNavigate={() => setOpen(false)} />}
+            {me.isOwner && <NavItem href="/finanzas" icon="wallet" label="Finanzas" onNavigate={() => setOpen(false)} />}
           </>
         )}
         <div className="sidebar-foot">
           <button className="nav-item sidebar-toggle" onClick={toggleSidebar} title="Plegar / desplegar el menú">
             <span className="nav-icon">
-              <span className="when-expanded">«</span>
-              <span className="when-collapsed">»</span>
+              <span className="when-expanded"><Icon name="chevLeft" /></span>
+              <span className="when-collapsed"><Icon name="chevRight" /></span>
             </span>
             <span className="nav-label">Plegar menú</span>
           </button>
           <button className="nav-item" onClick={toggleTheme} title="Modo claro / oscuro">
             <span className="nav-icon">
-              <span className="theme-light-only">☾</span>
-              <span className="theme-dark-only">☀</span>
+              <span className="theme-light-only"><Icon name="moon" /></span>
+              <span className="theme-dark-only"><Icon name="sun" /></span>
             </span>
             <span className="theme-light-only nav-label">Modo oscuro</span>
             <span className="theme-dark-only nav-label">Modo claro</span>
           </button>
           <Link href="/ajustes" className="nav-item" onClick={() => setOpen(false)} title="Ajustes: avisos y contraseña">
-            <span className="nav-icon">⚙️</span>
+            <span className="nav-icon"><Icon name="settings" /></span>
             <span className="nav-label">Ajustes</span>
           </Link>
           <div className="me-row">
@@ -127,7 +128,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
               onClick={handleSignOut}
               style={{ color: "var(--sidebar-ink-dim)" }}
             >
-              ⏻
+              <Icon name="logout" size={16} />
             </button>
           </div>
         </div>
@@ -139,7 +140,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           style={{ position: "fixed", top: 14, left: 14, zIndex: 45 }}
           onClick={() => setOpen((o) => !o)}
         >
-          ☰
+          <Icon name="menu" />
         </button>
         {children}
       </div>
