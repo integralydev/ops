@@ -37,15 +37,19 @@ function LoginForm() {
   const nextParam = params.get("next");
   const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/dashboard";
   const linkFailed = params.get("error") === "auth";
+  // Enlace del portal del cliente caducado o ya usado: se pide uno nuevo
+  const portalLinkFailed = params.get("error") === "enlace";
 
-  const [mode, setMode] = useState<Mode>("password");
+  const [mode, setMode] = useState<Mode>(portalLinkFailed ? "link" : "password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
-    linkFailed ? "error" : "idle",
+    linkFailed || portalLinkFailed ? "error" : "idle",
   );
   const [errorMsg, setErrorMsg] = useState(
-    linkFailed
+    portalLinkFailed
+      ? "El enlace ha caducado o ya se ha usado. Escribe tu email y te enviamos uno nuevo. / L'enllaç ha caducat o ja s'ha fet servir: escriu el teu email i te n'enviem un de nou."
+      : linkFailed
       ? "El enlace no es válido o ha caducado. Suele pasar si lo abres en otro navegador o dispositivo distinto al que lo pidió. Entra con tu contraseña o pide un enlace nuevo."
       : "",
   );
@@ -84,7 +88,7 @@ function LoginForm() {
             email: email.trim(),
             options: {
               shouldCreateUser: false,
-              emailRedirectTo: `${window.location.origin}/auth/callback`,
+              emailRedirectTo: `${window.location.origin}/auth/callback${nextParam ? `?next=${encodeURIComponent(next)}` : ""}`,
             },
           })
         : await supabase.auth.resetPasswordForEmail(email.trim(), {

@@ -2,13 +2,15 @@
 // Si prefieres tipos generados automáticamente, puedes sustituir este
 // archivo por el resultado de `supabase gen types typescript`.
 
-export type Role = "admin" | "director" | "developer" | "comercial";
+/** cliente: persona de un cliente con acceso a su portal (/portal). Nunca es miembro de un proyecto. */
+export type Role = "admin" | "director" | "developer" | "comercial" | "cliente";
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Administrador",
   director: "Director de proyecto",
   developer: "Developer",
   comercial: "Comercial",
+  cliente: "Cliente",
 };
 /** cliente: lo de siempre · laboratorio: producto propio (SaaS), sin cliente */
 export type ProjectKind = "cliente" | "laboratorio";
@@ -42,6 +44,9 @@ export interface Profile {
   notify_task_comments: boolean;
   created_at: string;
   added_by: string | null;
+  /** Solo rol cliente: su empresa. */
+  client_id?: string | null;
+  portal_last_seen_at?: string | null;
 }
 
 export type ClientStatus = "lead" | "prospect" | "client" | "former";
@@ -64,6 +69,12 @@ export interface Client {
   phone: string | null;
   notes: string | null;
   created_at: string;
+  /** Código del enlace de referidos (integralyaisolutions.com/contacto/?ref=…). */
+  referral_code?: string | null;
+  /** Idioma de su portal. */
+  portal_lang?: "es" | "ca";
+  /** Sin portal (clientes que entran por Ana). */
+  portal_off?: boolean;
 }
 
 export interface Project {
@@ -84,6 +95,10 @@ export interface Project {
   scope_source_file_id: string | null;
   /** Qué se vendió para arrancar: implementación (camino A) o diagnóstico (camino B). */
   onboarding_track: OnboardingTrack | null;
+  /** Siguiente paso que ve el cliente en su portal (next_step es interno). */
+  client_next_step?: string | null;
+  /** "Ahora no" en el aviso de invitar al cliente a su portal. */
+  portal_prompt_dismissed?: boolean;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -121,6 +136,8 @@ export interface FileRow {
   uploaded_by: string | null;
   uploaded_at: string;
   task_id: string | null;
+  /** El cliente lo ve en su portal. */
+  client_visible?: boolean;
 }
 
 export interface Note {

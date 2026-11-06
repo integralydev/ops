@@ -8,6 +8,7 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { RecentActivity } from "@/components/RecentActivity";
 import { Milestones } from "@/components/Milestones";
+import { PortalPending } from "@/components/PortalPending";
 import { useRouter } from "next/navigation";
 import { LAB_STATUSES, PROJECT_STATUSES, kindOf, statusLabel } from "@/lib/format";
 import { pickGreeting } from "@/lib/greetings";
@@ -79,6 +80,7 @@ export default function DashboardPage() {
         )}
       </div>
       <div className="content wide">
+        <PortalPending />
         <div className="dash-stats">
           {stats.map((s) => (
             <Link key={s.label} href={s.href} className="card dash-stat">

@@ -1385,3 +1385,62 @@ body{font-size:14.5px;}
   .com-item-side{flex-basis:100%; padding-left:41px; gap:10px;}
   .com-item-side .prospect-status{font-size:13px; padding:5px 26px 5px 11px;}
 }
+
+/* ===================== Portal del cliente (/portal) ===================== */
+.portal{min-height:100vh; background:var(--bg);}
+.portal-top{position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:14px max(16px, calc((100vw - 920px)/2)); background:var(--topbar-bg); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);}
+.portal-logo{height:20px; width:auto; display:block;}
+.portal-top-right{display:flex; align-items:center; gap:12px; min-width:0;}
+.portal-client{font-weight:600; font-size:14px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.portal-preview{background:var(--accent-soft); color:var(--accent-dim); text-align:center; font-size:13px; font-weight:600; padding:8px 16px;}
+.portal-main{max-width:920px; margin:0 auto; padding:34px 16px 56px; display:flex; flex-direction:column; gap:18px;}
+.portal-hello h1{font-size:30px; line-height:1.15; letter-spacing:-.02em; margin:0 0 6px;}
+.portal-hello p{color:var(--ink-soft); font-size:16px; margin:0;}
+.portal-project{display:flex; flex-direction:column; gap:14px;}
+.portal-project + .portal-project{margin-top:14px;}
+.portal-project-name{font-size:19px; margin:8px 0 0;}
+.portal-updated{font-size:12.5px;}
+.portal-next-text{font-size:19px; font-weight:600; line-height:1.4; margin-top:2px;}
+.portal-next-text.muted{font-size:15.5px; font-weight:500;}
+.portal-two{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+.portal-h3{display:flex; align-items:center; gap:10px; font-weight:700; font-size:15.5px; margin-bottom:14px;}
+.portal-small{font-size:13px;}
+.portal-file{display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--border); color:var(--ink-soft);}
+.portal-file:first-of-type{border-top:none; padding-top:0;}
+.portal-file-body{flex:1; min-width:0;}
+.portal-file-name{color:var(--ink); font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.portal-person{display:flex; align-items:center; gap:12px; padding:8px 0;}
+.portal-person-name{font-weight:600; font-size:14.5px;}
+.portal-refer{border:1.5px solid var(--accent-soft);}
+.portal-refer-text{color:var(--ink-soft); font-size:14.5px; line-height:1.6; margin:0 0 14px;}
+.portal-refer-link{display:flex; align-items:center; gap:10px; background:var(--surface-2); border-radius:var(--radius-sm); padding:8px 8px 8px 14px;}
+.portal-refer-link code{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; color:var(--ink); background:none;}
+.portal-empty{color:var(--ink-soft); text-align:center; padding:34px 20px;}
+.portal-foot{text-align:center; color:var(--ink-soft); font-size:13.5px; margin-top:10px;}
+.portal-foot a{color:var(--accent); font-weight:600;}
+@media (max-width:720px){
+  .portal-two{grid-template-columns:1fr;}
+  .portal-hello h1{font-size:25px;}
+  .portal-client{display:none;}
+  .portal-refer-link{flex-direction:column; align-items:stretch; padding:12px;}
+  .portal-refer-link code{white-space:normal; word-break:break-all;}
+}
+
+/* Bloque "Portal del cliente" en la ficha del proyecto (equipo) */
+.portal-box{border:1.5px dashed var(--accent-soft);}
+.portal-box.invite{border:1.5px solid var(--accent); background:linear-gradient(0deg, var(--surface), var(--surface)) padding-box;}
+.portal-box-head{display:flex; align-items:center; gap:12px; margin-bottom:10px;}
+.portal-box-head b{font-size:15px;}
+.portal-box .muted{font-size:13px;}
+.portal-users{display:flex; flex-direction:column; gap:6px; margin:8px 0 12px;}
+.portal-user{display:flex; align-items:center; gap:10px; font-size:13.5px; flex-wrap:wrap;}
+.portal-invite-form{display:grid; grid-template-columns:1fr 1.3fr 150px; gap:8px; align-items:end; margin-top:10px;}
+.portal-invite-form .field{margin:0;}
+@media (max-width:720px){ .portal-invite-form{grid-template-columns:1fr;} }
+.client-visible-btn{white-space:nowrap;}
+.client-visible-btn.on{background:var(--accent-soft); color:var(--accent-dim); border-color:transparent;}
+.portal-chip{display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:999px; background:var(--accent-soft); color:var(--accent-dim); font-size:13px; font-weight:600; text-decoration:none;}
+.portal-chip:hover{background:var(--accent); color:#fff;}
+.next-text .muted{font-weight:500;}

@@ -80,7 +80,7 @@ export default function TeamPage() {
     getTeamEmails().then(setEmails);
   }, [team]);
 
-  const roleOrder: Record<Role, number> = { admin: 0, director: 1, developer: 2, comercial: 3 };
+  const roleOrder: Record<Role, number> = { admin: 0, director: 1, developer: 2, comercial: 3, cliente: 4 };
   const rows = Object.entries(team).sort(([, a], [, b]) => roleOrder[a.role] - roleOrder[b.role]);
 
   async function setRole(id: string, role: Role) {

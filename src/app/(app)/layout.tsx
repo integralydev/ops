@@ -27,6 +27,9 @@ export default async function AuthenticatedLayout({
     redirect("/login?error=no_profile");
   }
 
+  // Un cliente solo tiene su portal: nunca entra en la app del equipo
+  if (profile.role === "cliente") redirect("/portal");
+
   if (!profile.full_name) redirect("/onboarding");
 
   // Propietario (finanzas): lo decide la base de datos. Si la función aún no

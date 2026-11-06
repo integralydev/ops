@@ -12,6 +12,7 @@ import { UpdateImages } from "@/components/project/UpdateImages";
 import type { Project } from "@/lib/database.types";
 import { Icon } from "@/components/Icon";
 import { CLIENT_PATH, LAB_PATH, phaseIndex, phaseLook } from "@/lib/phase";
+import { PortalBox } from "@/components/project/PortalBox";
 
 export function ResumenTab({ project }: { project: Project }) {
   const { me, isStaff, clients, nameFor } = useAppData();
@@ -98,6 +99,8 @@ export function ResumenTab({ project }: { project: Project }) {
         <div className="muted">Fuera del recorrido: {statusLabel(project.status).toLowerCase()}.</div>
       )}
     </div>
+
+    <PortalBox project={project} />
 
     <div className="grid two-col-main">
       <div className="card pad">

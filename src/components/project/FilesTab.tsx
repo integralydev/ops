@@ -43,6 +43,12 @@ export function FilesTab({ project }: { project: Project }) {
     if (!ok) toast("No se pudo abrir el archivo");
   }
 
+  async function toggleClientVisible(fileId: string, value: boolean) {
+    const { error } = await createClient().from("files").update({ client_visible: value }).eq("id", fileId);
+    if (error) toast("No se pudo cambiar: " + error.message);
+    else toast(value ? "Ahora el cliente lo ve en su portal" : "El cliente ya no lo ve");
+  }
+
   async function deleteFile(fileId: string, storagePath: string) {
     if (!confirm("¿Borrar este archivo?")) return;
     const supabase = createClient();
@@ -85,6 +91,15 @@ export function FilesTab({ project }: { project: Project }) {
                   {f.task_id && tasks[f.task_id] && <> · 📋 tarea «{tasks[f.task_id].title}»</>}
                 </div>
               </div>
+              {isStaff && project.client_id && (
+                <button
+                  className={"btn btn-sm client-visible-btn" + (f.client_visible ? " on" : "")}
+                  onClick={() => toggleClientVisible(f.id, !f.client_visible)}
+                  title={f.client_visible ? "El cliente lo ve en su portal. Clic para ocultarlo." : "Solo lo ve el equipo. Clic para que lo vea el cliente."}
+                >
+                  {f.client_visible ? "👁 Lo ve el cliente" : "Solo equipo"}
+                </button>
+              )}
               <button
                 className="btn btn-sm"
                 onClick={() => openFile(f.id, f.storage_path)}

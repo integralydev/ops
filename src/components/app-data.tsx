@@ -61,6 +61,8 @@ export function AppDataProvider({
     supabase
       .from("profiles")
       .select("*")
+      // Las personas de los clientes (portal) no son equipo
+      .neq("role", "cliente")
       .then(({ data }) => {
         if (!alive || !data) return;
         const t: Record<string, Profile> = {};
@@ -84,6 +86,7 @@ export function AppDataProvider({
         setTeam((prev) => {
           const next = { ...prev };
           if (payload.eventType === "DELETE") delete next[(payload.old as Profile).id];
+          else if ((payload.new as Profile).role === "cliente") delete next[(payload.new as Profile).id];
           else next[(payload.new as Profile).id] = payload.new as Profile;
           return next;
         });
