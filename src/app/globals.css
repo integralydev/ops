@@ -892,6 +892,7 @@ select{
 .client-status-lead{background:var(--surface-2); color:var(--ink-soft); border:1px solid var(--border);}
 .client-status-prospect{background:var(--accent-soft); color:var(--accent-dim);}
 .client-status-client{background:var(--success-soft); color:var(--success);}
+.client-status-paused{background:var(--warning-soft, var(--surface-2)); color:var(--warning, var(--ink-soft));}
 .client-status-former{background:var(--surface); color:var(--ink-faint); border:1px solid var(--border);}
 .chip-pick{display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid var(--border); border-radius:8px; min-height:42px;}
 .chip{display:flex; align-items:center; gap:6px; padding:4px 9px 4px 4px; border-radius:99px; background:var(--accent-soft); color:var(--accent-dim); font-size:12.4px; font-weight:600;}

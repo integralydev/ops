@@ -113,7 +113,8 @@ export const CLIENT_STATUSES: { value: ClientStatus; label: string; hint: string
   { value: "lead", label: "Lead", hint: "Contacto inicial, aún sin oportunidad clara" },
   { value: "prospect", label: "Prospect", hint: "Oportunidad real: reuniones, propuesta o presupuesto" },
   { value: "client", label: "Cliente", hint: "Trabajando con nosotros" },
-  { value: "former", label: "Ex cliente", hint: "Ya no trabajamos con ellos" },
+  { value: "paused", label: "Parado", hint: "Hubo oportunidad, pero se paró o no salió" },
+  { value: "former", label: "Ex cliente", hint: "Fue cliente y ya no trabajamos con ellos" },
 ];
 
 export function clientStatusLabel(s?: string | null) {

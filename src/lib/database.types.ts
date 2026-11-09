@@ -49,7 +49,7 @@ export interface Profile {
   portal_last_seen_at?: string | null;
 }
 
-export type ClientStatus = "lead" | "prospect" | "client" | "former";
+export type ClientStatus = "lead" | "prospect" | "client" | "paused" | "former";
 
 export interface ClientContact {
   name: string;
