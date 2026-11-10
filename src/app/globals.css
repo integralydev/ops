@@ -96,6 +96,15 @@ button{font-family:inherit;}
 .topbar-sub{color:var(--ink-faint); font-size:12.5px; margin-top:2px;}
 .content{padding:28px 32px 64px; max-width:1180px; width:100%;}
 .content.wide{max-width:1320px;}
+/* Pantallas grandes (monitor externo): más ancho útil y centrado. En portátil no cambia nada. */
+@media (min-width:1600px){
+  .content{max-width:1440px; margin-inline:auto; padding:32px 48px 72px;}
+  .content.wide{max-width:1640px;}
+}
+@media (min-width:2200px){
+  .content{max-width:1680px;}
+  .content.wide{max-width:1920px;}
+}
 
 /* ---------- Buttons ---------- */
 .btn{
