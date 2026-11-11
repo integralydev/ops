@@ -50,8 +50,12 @@ export function PortalBox({ project }: { project: Project }) {
 
   if (!isStaff || !client || kindOf(project) === "laboratorio") return null;
 
+  // Contactos del cliente que aún no tienen acceso (los que ya lo tienen no se proponen)
+  const invited = new Set((users || []).map((u) => u.email.toLowerCase()));
+  const pending = contacts.filter((c) => !invited.has(c.email!.toLowerCase()));
+
   function openForm() {
-    const c = contacts[0];
+    const c = pending[0];
     setName(c?.name || "");
     setEmail(c?.email || "");
     setLang(client?.portal_lang === "ca" ? "ca" : "es");
@@ -112,24 +116,25 @@ export function PortalBox({ project }: { project: Project }) {
     <div className="portal-invite-form">
       <div className="field">
         <label>Persona de contacto</label>
-        {contacts.length > 1 ? (
+        {pending.length > 0 && (
           <select
-            value={email}
+            value={pending.some((c) => c.email === email) ? email : ""}
             onChange={(e) => {
-              const c = contacts.find((x) => x.email === e.target.value);
-              setEmail(e.target.value);
+              const c = pending.find((x) => x.email === e.target.value);
+              setEmail(c?.email || "");
               setName(c?.name || "");
             }}
+            style={{ marginBottom: 6 }}
           >
-            {contacts.map((c) => (
-              <option key={c.email} value={c.email}>
+            {pending.map((c) => (
+              <option key={c.email} value={c.email!}>
                 {c.name ? `${c.name} · ${c.email}` : c.email}
               </option>
             ))}
+            <option value="">Otra persona…</option>
           </select>
-        ) : (
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" />
         )}
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" />
       </div>
       <div className="field">
         <label>Email</label>
