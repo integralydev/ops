@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/safe-next";
 
 // Enlaces de acceso que enviamos nosotros (invitación al portal del cliente):
 // llevan un token_hash que se canjea aquí por una sesión.
@@ -9,7 +10,7 @@ export async function GET(request: Request) {
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const nextParam = searchParams.get("next") ?? "/portal";
-  const next = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/portal";
+  const next = safeNext(nextParam, "/portal");
 
   if (tokenHash && type) {
     const supabase = await createClient();

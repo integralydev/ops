@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { safeNext } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "password" | "link" | "reset";
@@ -35,7 +36,7 @@ function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const nextParam = params.get("next");
-  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/dashboard";
+  const next = safeNext(nextParam, "/dashboard");
   const linkFailed = params.get("error") === "auth";
   // Enlace del portal del cliente caducado o ya usado: se pide uno nuevo
   const portalLinkFailed = params.get("error") === "enlace";

@@ -659,10 +659,12 @@ export function opportunityViews(opsProjects: OpsProject[], opportunities: FinOp
     const opp = byProject.get(project.id) || null;
     const open = OPEN_STATUSES.includes(project.status);
     if (!open && !opp) continue; // nunca fue oportunidad
-    const state: OpportunityView["state"] = open
-      ? "abierta"
-      : opp?.converted_fin_project_id
-        ? "convertida"
+    // Pasada a confirmado: ya cuenta en su proyecto de Finanzas, aunque en el OPS
+    // siga en presupuesto (aceptada, a la espera del primer pago)
+    const state: OpportunityView["state"] = opp?.converted_fin_project_id
+      ? "convertida"
+      : open
+        ? "abierta"
         : WON_STATUSES.includes(project.status)
           ? "ganada"
           : "perdida";
