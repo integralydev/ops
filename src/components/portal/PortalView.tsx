@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
@@ -41,11 +41,45 @@ export function PortalView({ data }: { data: PortalHome }) {
   const signed = data.projects.some((p) => SIGNED_STATUSES.includes(p.status));
   const many = data.projects.length > 1;
 
+  // Con varios proyectos: null = visión general; si no, el id del proyecto.
+  // Va en la URL (?p=) para que el botón de volver del navegador funcione.
+  const [sel, setSel] = useState<string | null>(null);
+  useEffect(() => {
+    if (!many) return;
+    const read = () => {
+      const id = new URLSearchParams(window.location.search).get("p");
+      setSel(id && data.projects.some((p) => p.id === id) ? id : null);
+    };
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, [many, data.projects]);
+
+  function go(id: string | null) {
+    setSel(id);
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("p", id);
+    else url.searchParams.delete("p");
+    window.history.pushState(null, "", url.toString());
+    window.scrollTo({ top: 0 });
+  }
+
+  // Orden de las pestañas: visión general y luego cada proyecto
+  const order: (string | null)[] = [null, ...data.projects.map((p) => p.id)];
+  function step(d: 1 | -1) {
+    const i = order.indexOf(sel);
+    go(order[(i + d + order.length) % order.length]);
+  }
+
   async function logout() {
     await createClient().auth.signOut();
     router.replace("/login");
     router.refresh();
   }
+
+  const current = many ? data.projects.find((p) => p.id === sel) || null : data.projects[0] || null;
+  const billing = data.billing;
+  const hasBilling = !!billing && (billing.invoices.length > 0 || billing.fees.length > 0);
 
   return (
     <div className="portal">
@@ -76,17 +110,52 @@ export function PortalView({ data }: { data: PortalHome }) {
           <p>{many ? t.introMany : t.intro}</p>
         </div>
 
+        {many && (
+          <nav className="portal-tabs" aria-label={t.overview}>
+            <div className="portal-tabs-list" role="tablist">
+              {order.map((id) => {
+                const p = data.projects.find((x) => x.id === id);
+                return (
+                  <button
+                    key={id || "all"}
+                    role="tab"
+                    aria-selected={sel === id}
+                    className={"portal-tab" + (sel === id ? " on" : "")}
+                    onClick={() => go(id)}
+                  >
+                    {p ? p.name : t.overview}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="portal-tabs-arrows">
+              <button className="btn btn-sm portal-arrow" aria-label={t.prev} onClick={() => step(-1)}>
+                <Icon name="arrow" size={16} />
+              </button>
+              <button className="btn btn-sm portal-arrow next" aria-label={t.nextProject} onClick={() => step(1)}>
+                <Icon name="arrow" size={16} />
+              </button>
+            </div>
+          </nav>
+        )}
+
         {data.projects.length === 0 ? (
           <div className="card pad portal-empty">{t.empty}</div>
-        ) : (
-          data.projects.map((p) => <ProjectBlock key={p.id} p={p} t={t} lang={lang} showName={many} />)
+        ) : many && !current ? (
+          <Overview data={data} t={t} lang={lang} go={go} />
+        ) : current ? (
+          <ProjectBlock key={current.id} p={current} t={t} lang={lang} title={many ? current.name : null} />
+        ) : null}
+
+        {/* Facturas: en la visión general (o con un solo proyecto) todas; dentro de un proyecto, las suyas */}
+        {hasBilling && billing && (!many || !current) && <Billing b={billing} t={t} lang={lang} title={t.billing} />}
+        {hasBilling && billing && many && current && (
+          <ProjectBilling b={billing} projectId={current.id} t={t} lang={lang} />
         )}
 
-        {data.billing && (data.billing.invoices.length > 0 || data.billing.fees.length > 0) && (
-          <Billing b={data.billing} t={t} lang={lang} />
+        {signed && data.client.referral_code && (!many || !current) && (
+          <Referral code={data.client.referral_code} t={t} />
         )}
-
-        {signed && data.client.referral_code && <Referral code={data.client.referral_code} t={t} />}
 
         <p className="portal-foot">
           {t.questions} <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
@@ -96,11 +165,96 @@ export function PortalView({ data }: { data: PortalHome }) {
   );
 }
 
-function ProjectBlock({ p, t, lang, showName }: { p: PortalProject; t: Texts; lang: "es" | "ca"; showName: boolean }) {
+function phaseName(status: string, lang: "es" | "ca") {
+  const at = portalStep(status);
+  return at >= 0 ? PORTAL_PATH[at][lang] : "";
+}
+
+function Overview({
+  data,
+  t,
+  lang,
+  go,
+}: {
+  data: PortalHome;
+  t: Texts;
+  lang: "es" | "ca";
+  go: (id: string) => void;
+}) {
+  const pending = (data.billing?.invoices || []).filter((i) => i.status === "pendiente" || i.status === "parcial");
+  return (
+    <>
+      <section className="card pad portal-steps">
+        <div className="portal-h3">
+          <span className="ico ico-sm ico-p">
+            <Icon name="flag" size={16} />
+          </span>
+          {t.nextSteps}
+        </div>
+        {data.projects.map((p) => (
+          <button key={p.id} className="portal-step-row" onClick={() => go(p.id)}>
+            <span className="portal-step-proj">{p.name}</span>
+            <span className={"portal-step-text" + (p.next_step ? "" : " muted")}>{p.next_step || t.nextEmpty}</span>
+            <Icon name="arrow" size={16} />
+          </button>
+        ))}
+        {pending.map((i) => (
+          <div key={i.id} className="portal-step-pay">
+            <Icon name="file" size={15} /> {t.payPending(i.number, fmtMoney(i, lang))}
+          </div>
+        ))}
+      </section>
+
+      <div className="portal-cards">
+        {data.projects.map((p) => {
+          const at = portalStep(p.status);
+          return (
+            <button key={p.id} className="card pad portal-pcard" onClick={() => go(p.id)}>
+              <div className="portal-pcard-head">
+                <span className="portal-pcard-name">{p.name}</span>
+                <span className="portal-phase">{phaseName(p.status, lang)}</span>
+              </div>
+              <div className="portal-progress" aria-hidden>
+                {PORTAL_PATH.map((s, i) => (
+                  <span key={s.value} className={i < at ? "done" : i === at ? "now" : ""} />
+                ))}
+              </div>
+              <span className="muted portal-small">
+                {t.updated} {fmtDay(p.updated_at, lang)}
+              </span>
+              <span className="portal-pcard-go">
+                {t.seeProject} <Icon name="arrow" size={15} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function ProjectBlock({ p, t, lang, title }: { p: PortalProject; t: Texts; lang: "es" | "ca"; title: string | null }) {
   const at = portalStep(p.status);
   return (
     <section className="portal-project">
-      {showName && <h2 className="portal-project-name">{p.name}</h2>}
+      {title && (
+        <div className="portal-project-head">
+          <h2 className="portal-project-name">{title}</h2>
+          <span className="portal-phase">{phaseName(p.status, lang)}</span>
+        </div>
+      )}
+
+      <div className="card pad">
+        <div className="next-hero portal-next">
+          <div className="ico ico-p">
+            <Icon name="flag" size={20} />
+          </div>
+          <div className="next-body">
+            <div className="next-label">{t.next}</div>
+            <div className={"portal-next-text" + (p.next_step ? "" : " muted")}>{p.next_step || t.nextEmpty}</div>
+          </div>
+        </div>
+      </div>
 
       <div className="card pad journey">
         <div className="journey-head">
@@ -119,18 +273,6 @@ function ProjectBlock({ p, t, lang, showName }: { p: PortalProject; t: Texts; la
               </div>
             );
           })}
-        </div>
-      </div>
-
-      <div className="card pad">
-        <div className="next-hero portal-next">
-          <div className="ico ico-p">
-            <Icon name="flag" size={20} />
-          </div>
-          <div className="next-body">
-            <div className="next-label">{t.next}</div>
-            <div className={"portal-next-text" + (p.next_step ? "" : " muted")}>{p.next_step || t.nextEmpty}</div>
-          </div>
         </div>
       </div>
 
@@ -171,6 +313,30 @@ function ProjectBlock({ p, t, lang, showName }: { p: PortalProject; t: Texts; la
   );
 }
 
+/** Facturas y cuota de un solo proyecto (si la base de datos ya dice de qué proyecto es cada una). */
+function ProjectBilling({ b, projectId, t, lang }: { b: PortalBilling; projectId: string; t: Texts; lang: "es" | "ca" }) {
+  const known = b.invoices.some((i) => i.project_id !== undefined);
+  if (!known) return null;
+  const mine: PortalBilling = {
+    invoices: b.invoices.filter((i) => i.project_id === projectId),
+    fees: b.fees.filter((f) => f.project_id === projectId),
+  };
+  if (mine.invoices.length === 0 && mine.fees.length === 0) {
+    return (
+      <section className="card pad portal-billing">
+        <div className="portal-h3">
+          <span className="ico ico-sm ico-p">
+            <Icon name="file" size={16} />
+          </span>
+          {t.projectBilling}
+        </div>
+        <div className="muted portal-small">{t.projectInvoicesEmpty}</div>
+      </section>
+    );
+  }
+  return <Billing b={mine} t={t} lang={lang} title={t.projectBilling} />;
+}
+
 function fmtMoney(inv: { eur: number; usd: number | null }, lang: "es" | "ca") {
   void lang; // mismo formato en los dos idiomas: 1.621,58
   // A mano: toLocaleString("es-ES") no pone el punto en 4 cifras (1621,58)
@@ -192,7 +358,7 @@ function cleanConcept(c: string) {
     .trim();
 }
 
-function Billing({ b, t, lang }: { b: PortalBilling; t: Texts; lang: "es" | "ca" }) {
+function Billing({ b, t, lang, title }: { b: PortalBilling; t: Texts; lang: "es" | "ca"; title: string }) {
   const pending = b.invoices.filter((i) => i.status === "pendiente" || i.status === "parcial");
   return (
     <section className="card pad portal-billing">
@@ -200,7 +366,7 @@ function Billing({ b, t, lang }: { b: PortalBilling; t: Texts; lang: "es" | "ca"
         <span className="ico ico-sm ico-p">
           <Icon name="file" size={16} />
         </span>
-        {t.billing}
+        {title}
       </div>
 
       <div className="portal-bill-sum">
@@ -324,17 +490,13 @@ function Referral({ code, t }: { code: string; t: Texts }) {
     }
   }
   return (
-    <section className="card pad portal-refer">
-      <div className="portal-h3">
-        <span className="ico ico-sm ico-w">
-          <Icon name="spark" size={16} />
-        </span>
-        {t.referTitle}
-      </div>
-      <p className="portal-refer-text">{t.referText}</p>
+    <section className="portal-refer">
+      <p className="portal-refer-text">
+        <Icon name="spark" size={15} /> {t.referShort}
+      </p>
       <div className="portal-refer-link">
         <code>{link}</code>
-        <button className="btn btn-sm btn-primary" onClick={copy}>
+        <button className="btn btn-sm" onClick={copy}>
           {copied ? (
             <>
               <Icon name="check" size={15} /> {t.copied}

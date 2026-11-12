@@ -39,11 +39,13 @@ export interface PortalInvoice {
   eur: number;
   usd: number | null;
   pdf: boolean;
+  /** Proyecto del OPS al que pertenece (null/ausente: sin asignar) */
+  project_id?: string | null;
 }
 
 export interface PortalBilling {
   invoices: PortalInvoice[];
-  fees: { title: string; eur: number }[];
+  fees: { title: string; eur: number; project_id?: string | null }[];
 }
 
 export interface PortalHome {
@@ -116,6 +118,15 @@ export const T = {
     st: { cobrada: "Pagada", pendiente: "Pendiente", parcial: "Pago parcial", abono: "Abono" },
     payNote: "Los datos para el pago están en cada factura.",
     download: "PDF",
+    overview: "Visión general",
+    nextSteps: "Siguientes pasos",
+    payPending: (n: string, amount: string) => `Factura ${n} pendiente de pago: ${amount}`,
+    seeProject: "Ver proyecto",
+    prev: "Proyecto anterior",
+    nextProject: "Proyecto siguiente",
+    projectBilling: "Facturas de este proyecto",
+    projectInvoicesEmpty: "Este proyecto aún no tiene facturas.",
+    referShort: "¿Conoces a una empresa a la que le iría bien? Recomiéndanos y te descontamos parte de tu mantenimiento.",
   },
   ca: {
     hello: (n: string) => `Hola, ${n}`,
@@ -153,5 +164,14 @@ export const T = {
     st: { cobrada: "Pagada", pendiente: "Pendent", parcial: "Pagament parcial", abono: "Abonament" },
     payNote: "Les dades per al pagament són a cada factura.",
     download: "PDF",
+    overview: "Visió general",
+    nextSteps: "Següents passos",
+    payPending: (n: string, amount: string) => `Factura ${n} pendent de pagament: ${amount}`,
+    seeProject: "Veure projecte",
+    prev: "Projecte anterior",
+    nextProject: "Projecte següent",
+    projectBilling: "Factures d'aquest projecte",
+    projectInvoicesEmpty: "Aquest projecte encara no té factures.",
+    referShort: "Coneixes una empresa a qui li aniria bé? Recomana'ns i et descomptem part del manteniment.",
   },
 } as const;
