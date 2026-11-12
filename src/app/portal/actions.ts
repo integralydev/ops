@@ -102,7 +102,18 @@ export async function inviteToPortal(input: {
 
   // ¿Ya hay una cuenta con este email? Si es del equipo, no se toca.
   const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  const existing = list?.users?.find((u: { email?: string }) => u.email?.toLowerCase() === email);
+  let existing = list?.users?.find((u: { email?: string }) => u.email?.toLowerCase() === email);
+  if (existing) {
+    const { data: prof } = await admin.from("profiles").select("role, client_id, added_by").eq("id", existing.id).maybeSingle();
+    // Cuenta que nadie del equipo creó ni se confirmó nunca (p. ej. alguien la
+    // registró por su cuenta con este email): no se reutiliza, se borra y se
+    // invita de cero. Si no, al confirmarla le daríamos el portal a quien la creó.
+    if (!existing.email_confirmed_at && !prof?.added_by) {
+      const { error: delErr } = await admin.auth.admin.deleteUser(existing.id);
+      if (delErr) return { error: "No se pudo preparar el acceso: " + delErr.message };
+      existing = undefined;
+    }
+  }
   if (existing) {
     const { data: prof } = await admin.from("profiles").select("role, client_id").eq("id", existing.id).maybeSingle();
     if (prof && prof.role !== "cliente") {
