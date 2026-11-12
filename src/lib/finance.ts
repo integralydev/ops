@@ -951,6 +951,7 @@ export type MonthCard = {
   month: string;
   label: string;
   isCurrent: boolean;
+  isPast?: boolean;
   mensualidades: CardLine[];
   mensTotal: number;
   otherIn: CardLine[];
@@ -975,12 +976,13 @@ const sumEur = (ls: CardLine[]) => ls.reduce((s, l) => s + l.eur, 0);
 const byDate = (a: CardLine, b: CardLine) => a.date.localeCompare(b.date);
 
 /** Tarjetas desde el mes actual hasta el mes que contiene hoy + `days`. */
-export function monthCards(input: ForecastInput, days = 60, today = todayISO()) {
+export function monthCards(input: ForecastInput, days = 60, today = todayISO(), range?: { from: string; to: string }) {
   const { fx, invoices, payments, scheduled } = input;
   const cur = today.slice(0, 7);
   const end = new Date(`${today}T12:00:00`);
   end.setDate(end.getDate() + days);
-  const lastMonth = todayISO(end).slice(0, 7);
+  const lastMonth = range ? range.to : todayISO(end).slice(0, 7);
+  const firstMonth = range ? range.from : cur;
   const moves = forecastMovements(input, lastMonth, today);
   const sched = new Map(scheduled.map((s) => [s.id, s]));
 
@@ -1019,9 +1021,10 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
   });
 
   const cards: MonthCard[] = [];
-  for (let m = cur; m <= lastMonth; m = addMonths(m, 1)) {
+  for (let m = firstMonth; m <= lastMonth; m = addMonths(m, 1)) {
     const isCurrent = m === cur;
-    const ofMonth = moves.filter((x) => (isCurrent ? x.date.slice(0, 7) <= m : x.date.slice(0, 7) === m));
+    // Meses pasados: solo lo que llegó y lo que se pagó (lo vencido cuenta en el mes actual)
+    const ofMonth = m < cur ? [] : moves.filter((x) => (isCurrent ? x.date.slice(0, 7) <= m : x.date.slice(0, 7) === m));
     const isMens = (x: Movement) =>
       !x.overdue &&
       (x.source === "mensualidad" ||
@@ -1102,6 +1105,7 @@ export function monthCards(input: ForecastInput, days = 60, today = todayISO()) 
       month: m,
       label: monthLabel(m),
       isCurrent,
+      isPast: m < cur,
       mensualidades,
       mensTotal: sumEur(mensualidades),
       otherIn,

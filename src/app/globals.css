@@ -458,6 +458,19 @@ div.task-hero-btn{cursor:default;}
 .flow-tip div{display:flex; align-items:center; gap:6px;}
 .flow-tip div span:last-child{margin-left:auto; font-weight:700; padding-left:12px;}
 .flow-tip .is-neg{color:var(--danger);}
+.flow-tip .flow-tip-hint{display:block; margin-top:6px; padding-top:6px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:11px;}
+.flow-hit rect, .flow-hit circle{cursor:pointer;}
+/* Detalle del mes: resumen clicable (entra / sale / queda) — 12 nov 2026 */
+.fin-detail-sum{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; padding:0 20px 4px;}
+.fin-detail-kpi{appearance:none; font:inherit; color:inherit; text-align:left; cursor:pointer; display:flex; flex-direction:column; gap:2px; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border); background:var(--surface);}
+.fin-detail-kpi span{font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:700; color:var(--ink-faint);}
+.fin-detail-kpi b{font-size:20px; letter-spacing:-.01em; font-variant-numeric:tabular-nums;}
+.fin-detail-kpi.is-in b{color:var(--fin-in);}
+.fin-detail-kpi.is-out b{color:var(--fin-out);}
+.fin-detail-kpi.is-net.is-neg b{color:var(--danger);}
+.fin-detail-kpi.on{border-color:var(--accent); background:var(--accent-soft);}
+.fin-detail-kpi.is-in.on{border-color:var(--success); background:var(--success-soft);}
+.fin-detail-kpi.is-out.on{border-color:var(--danger); background:var(--danger-soft, var(--surface-2));}
 .fin-list-row{display:grid; grid-template-columns:96px 1fr auto; gap:12px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--border); font-size:13px;}
 .fin-list-row{cursor:pointer;}
 .fin-list-row:hover{background:var(--surface-2);}

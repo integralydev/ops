@@ -68,13 +68,19 @@ export function MonthDetail({
   showProbable,
   actions,
   onClose,
+  focus: initialFocus = "all",
 }: {
   card: MonthCard;
   showProbable: boolean;
   actions: Actions;
   onClose: () => void;
+  focus?: "in" | "out" | "all";
 }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [focus, setFocus] = useState(initialFocus);
+  const showIn = focus !== "out";
+  const showOut = focus !== "in";
+  const when = c.isPast ? "real" : c.isCurrent ? "este mes" : "previsto";
   const toggle = (k: string) =>
     setOpen((s) => {
       const n = new Set(s);
@@ -93,15 +99,28 @@ export function MonthDetail({
       <div className="modal fin-month-detail">
         <div className="modal-head">
           <h3 style={{ fontSize: 16 }}>
-            {c.label}
-            {c.isCurrent ? " · este mes" : ""}
+            {c.label} <span className="muted">· {when}</span>
           </h3>
-          <span className={"fin-month-detail-net" + (c.net < 0 ? " fin-red" : "")}>queda {eur0(c.net)}</span>
           <button className="icon-btn" onClick={onClose}>
             ✕
           </button>
         </div>
+        <div className="fin-detail-sum">
+          <button className={"fin-detail-kpi is-in" + (focus === "in" ? " on" : "")} onClick={() => setFocus("in")}>
+            <span>Entra</span>
+            <b>{eur0(c.inTotal)}</b>
+          </button>
+          <button className={"fin-detail-kpi is-out" + (focus === "out" ? " on" : "")} onClick={() => setFocus("out")}>
+            <span>Sale</span>
+            <b>{eur0(c.outTotal)}</b>
+          </button>
+          <button className={"fin-detail-kpi is-net" + (focus === "all" ? " on" : "") + (c.net < 0 ? " is-neg" : "")} onClick={() => setFocus("all")}>
+            <span>Queda</span>
+            <b>{eur0(c.net)}</b>
+          </button>
+        </div>
         <div className="modal-body">
+          {showIn && (
           <div className="fin-month-block">
             <div className="fin-month-title">
               Entra <span className="fin-in">{eur0(c.inTotal)}</span>
@@ -135,7 +154,9 @@ export function MonthDetail({
             ))}
             {c.inTotal === 0 && <div className="fin-line muted">Nada</div>}
           </div>
+          )}
 
+          {showOut && (
           <div className="fin-month-block">
             <div className="fin-month-title">
               Sale <span className="fin-out">{eur0(c.outTotal)}</span>
@@ -167,13 +188,16 @@ export function MonthDetail({
             })}
             {c.outTotal === 0 && <div className="fin-line muted">Nada</div>}
           </div>
+          )}
 
-          {showProbable && c.probable.length > 0 && (
+          {showProbable && c.probable.filter((l) => (focus === "all" ? true : (l.movement?.direction === "salida") === (focus === "out"))).length > 0 && (
             <div className="fin-month-block is-probable">
               <div className="fin-month-title">Probable</div>
-              {c.probable.map((l) => (
-                <Line key={l.key} l={l} actions={actions} />
-              ))}
+              {c.probable
+                .filter((l) => (focus === "all" ? true : (l.movement?.direction === "salida") === (focus === "out")))
+                .map((l) => (
+                  <Line key={l.key} l={l} actions={actions} />
+                ))}
             </div>
           )}
         </div>

@@ -18,7 +18,18 @@ const niceStep = (max: number) => {
 };
 const kLabel = (v: number) => (Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 })}k€` : `${v}€`);
 
-export function FlowChart({ rows, showProbable }: { rows: MonthFlow[]; showProbable: boolean }) {
+export type FlowFocus = "in" | "out" | "all";
+
+export function FlowChart({
+  rows,
+  showProbable,
+  onPick,
+}: {
+  rows: MonthFlow[];
+  showProbable: boolean;
+  /** Clic en un mes: barra verde = entradas, barra roja = salidas, punto = todo */
+  onPick?: (month: string, focus: FlowFocus) => void;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const curIdx = rows.findIndex((r) => r.isCurrent);
@@ -118,19 +129,44 @@ export function FlowChart({ rows, showProbable }: { rows: MonthFlow[]; showProba
             <circle key={r.month} cx={cx(i)} cy={y(r.net)} r={4.5} className={r.net < 0 ? "flow-dot is-neg" : "flow-dot"} />
           ))}
 
-          {/* Zonas de detalle al pasar el ratón */}
+          {/* Zonas de clic: por encima del cero, entradas; por debajo, salidas; el punto, el mes entero */}
           {rows.map((r, i) => (
-            <rect
+            <g
               key={r.month}
-              x={PAD.l + cw * i}
-              y={PAD.t - 18}
-              width={cw}
-              height={H - PAD.t - PAD.b + 18}
-              fill="transparent"
+              className={onPick ? "flow-hit" : undefined}
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
-              onClick={() => setHover(hover === i ? null : i)}
-            />
+            >
+              <rect
+                x={PAD.l + cw * i}
+                y={PAD.t - 18}
+                width={cw}
+                height={y(0) - (PAD.t - 18)}
+                fill="transparent"
+                onClick={() => (onPick ? onPick(r.month, "in") : setHover(hover === i ? null : i))}
+              >
+                <title>{`${r.label}: ver lo que entra`}</title>
+              </rect>
+              <rect
+                x={PAD.l + cw * i}
+                y={y(0)}
+                width={cw}
+                height={H - PAD.b - y(0)}
+                fill="transparent"
+                onClick={() => (onPick ? onPick(r.month, "out") : setHover(hover === i ? null : i))}
+              >
+                <title>{`${r.label}: ver lo que sale`}</title>
+              </rect>
+              <circle
+                cx={cx(i)}
+                cy={y(r.net)}
+                r={12}
+                fill="transparent"
+                onClick={() => (onPick ? onPick(r.month, "all") : setHover(hover === i ? null : i))}
+              >
+                <title>{`${r.label}: resumen del mes`}</title>
+              </circle>
+            </g>
           ))}
         </svg>
 
@@ -154,6 +190,7 @@ export function FlowChart({ rows, showProbable }: { rows: MonthFlow[]; showProba
                 Con probable (ponderado) <span>{eur0(h.netWithProbable)}</span>
               </div>
             )}
+            {onPick && <div className="flow-tip-hint">Clic: verde = entradas · rojo = salidas · punto = todo</div>}
           </div>
         )}
       </div>

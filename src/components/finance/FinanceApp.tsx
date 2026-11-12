@@ -112,6 +112,7 @@ export function FinanceApp() {
   const [editPayment, setEditPayment] = useState<PaymentEdit | null>(null);
   const [skipItem, setSkipItem] = useState<StaleItem | null>(null);
   const [detailMonth, setDetailMonth] = useState<string | null>(null);
+  const [detailFocus, setDetailFocus] = useState<"in" | "out" | "all">("all");
   const [allStale, setAllStale] = useState(false);
   const [editOpp, setEditOpp] = useState<OpportunityView | null>(null);
 
@@ -261,7 +262,9 @@ export function FinanceApp() {
   const now = flows.find((f) => f.isCurrent)!;
   const cards = monthCards(data, 60, today);
   const nextCards = cards.filter((c) => !c.isCurrent);
-  const detailCard = cards.find((c) => c.month === detailMonth);
+  // Detalle de cualquier mes del gráfico (pasado, actual o futuro)
+  const chartCards = monthCards(data, 60, today, { from: flows[0].month, to: flows[flows.length - 1].month });
+  const detailCard = chartCards.find((c) => c.month === detailMonth) || cards.find((c) => c.month === detailMonth);
   const stale = staleScheduled(data, today, bank.synced_at ? BANK_GRACE_DAYS : 0);
   const staleConfirmed = stale.filter((x) => !x.probable);
   const staleProbable = stale.filter((x) => x.probable);
@@ -460,7 +463,10 @@ export function FinanceApp() {
         <div className="fin-head" style={{ marginTop: 0 }}>
           <div className="section-title">Este mes · {monthLabel(curMonth)}</div>
           <div className="fin-actions">
-            <button className="btn btn-sm" onClick={() => setDetailMonth(curMonth)}>
+            <button className="btn btn-sm" onClick={() => {
+              setDetailFocus("all");
+              setDetailMonth(curMonth);
+            }}>
               Ver detalle
             </button>
             <button className="btn btn-sm" onClick={() => setEditScheduled("new")}>
@@ -546,14 +552,24 @@ export function FinanceApp() {
               <span>Mostrar probable</span>
             </label>
           </div>
-          <FlowChart rows={flows} showProbable={showProbable} />
+          <FlowChart
+            rows={flows}
+            showProbable={showProbable}
+            onPick={(m, f) => {
+              setDetailFocus(f);
+              setDetailMonth(m);
+            }}
+          />
         </div>
 
         {/* Próximos 60 días */}
         <div className="fin-head">
           <div className="section-title">Próximos 60 días</div>
         </div>
-        <UpcomingMonths cards={nextCards} showProbable={showProbable} onOpen={setDetailMonth} />
+        <UpcomingMonths cards={nextCards} showProbable={showProbable} onOpen={(m) => {
+            setDetailFocus("all");
+            setDetailMonth(m);
+          }} />
 
         {/* Oportunidades: proyectos del OPS en descubrimiento, propuesta o presupuesto */}
         {(oppOpen.length > 0 || oppWon.length > 0) && (
@@ -926,6 +942,8 @@ export function FinanceApp() {
 
       {detailCard && (
         <MonthDetail
+          key={`${detailCard.month}-${detailFocus}`}
+          focus={detailFocus}
           card={detailCard}
           showProbable={showProbable}
           onClose={() => setDetailMonth(null)}
