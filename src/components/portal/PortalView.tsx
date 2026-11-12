@@ -181,7 +181,6 @@ function Overview({
   lang: "es" | "ca";
   go: (id: string) => void;
 }) {
-  const pending = (data.billing?.invoices || []).filter((i) => i.status === "pendiente" || i.status === "parcial");
   return (
     <>
       <section className="card pad portal-steps">
@@ -197,11 +196,6 @@ function Overview({
             <span className={"portal-step-text" + (p.next_step ? "" : " muted")}>{p.next_step || t.nextEmpty}</span>
             <Icon name="arrow" size={16} />
           </button>
-        ))}
-        {pending.map((i) => (
-          <div key={i.id} className="portal-step-pay">
-            <Icon name="file" size={15} /> {t.payPending(i.number, fmtMoney(i, lang))}
-          </div>
         ))}
       </section>
 
