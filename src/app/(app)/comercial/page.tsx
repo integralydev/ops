@@ -38,9 +38,11 @@ export default function ComercialPage() {
   const [sector, setSector] = useState("all");
   const [priority, setPriority] = useState("all");
   const [sortBy, setSortBy] = useState<"action" | "priority">("action");
-  // Solo admin: todas, solo las compartidas con Comercial o solo las privadas
+  // Solo admin: por defecto, solo su prospección (las privadas); las
+  // compartidas con Comercial quedan a un clic, discretas.
   // (RLS ya no le manda las privadas a quien no es admin)
-  const [scope, setScope] = useState<"all" | "shared" | "private">("all");
+  const [adminScope, setScope] = useState<"all" | "shared" | "private">("private");
+  const scope = isAdmin ? adminScope : "all";
   const [showFilters, setShowFilters] = useState(false);
 
   const everything = useMemo(() => Object.values(prospects), [prospects]);
@@ -119,7 +121,7 @@ export default function ComercialPage() {
     <>
       <div className="topbar">
         <div>
-          <h1>Comercial</h1>
+          <h1>{scope === "private" ? "Mi prospección" : "Comercial"}</h1>
           <div className="topbar-sub">Empresas a las que queremos vender</div>
         </div>
         <button className="btn btn-primary btn-icon" onClick={() => setShowNew(true)}>
@@ -128,16 +130,29 @@ export default function ComercialPage() {
       </div>
       <div className="content wide">
         {isAdmin && (
-          <div className="seg com-scope" role="group" aria-label="Qué empresas ver">
-            <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>
-              Todas <span className="kind-count">{everything.length}</span>
-            </button>
-            <button className={scope === "shared" ? "active" : ""} onClick={() => setScope("shared")}>
-              Compartidas <span className="kind-count">{everything.length - privateCount}</span>
-            </button>
-            <button className={scope === "private" ? "active" : ""} onClick={() => setScope("private")}>
-              Mi prospección <span className="kind-count">{privateCount}</span>
-            </button>
+          <div className="com-scope-quiet">
+            {scope === "private" ? (
+              <button className="link-quiet" onClick={() => setScope("shared")}>
+                Ver las compartidas con Comercial ({everything.length - privateCount})
+              </button>
+            ) : (
+              <>
+                <span>
+                  Viendo {scope === "shared" ? "las compartidas" : "todas"} ·{" "}
+                </span>
+                <button className="link-quiet" onClick={() => setScope("private")}>
+                  Volver a mi prospección
+                </button>
+                {scope === "shared" && (
+                  <>
+                    {" · "}
+                    <button className="link-quiet" onClick={() => setScope("all")}>
+                      Ver todas
+                    </button>
+                  </>
+                )}
+              </>
+            )}
           </div>
         )}
 
