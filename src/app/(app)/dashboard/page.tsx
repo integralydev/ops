@@ -9,6 +9,7 @@ import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { RecentActivity } from "@/components/RecentActivity";
 import { Milestones } from "@/components/Milestones";
 import { PortalPending } from "@/components/PortalPending";
+import { MyTasks } from "@/components/MyTasks";
 import { useRouter } from "next/navigation";
 import { LAB_STATUSES, PROJECT_STATUSES, kindOf, statusLabel } from "@/lib/format";
 import { pickGreeting } from "@/lib/greetings";
@@ -97,6 +98,7 @@ export default function DashboardPage() {
 
         <div className="dash-grid">
           <section>
+            <MyTasks projects={projects} />
             <div className="dash-section-head">
               <div className="section-title">
                 {isStaff ? "Proyectos en curso" : "Tus proyectos en curso"}
