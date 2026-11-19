@@ -26,21 +26,29 @@ function dueLabel(due: string, today: string) {
  * lo abierto (con fecha primero).
  */
 export function MyTasks({ projects }: { projects: Record<string, Project> }) {
-  const { me } = useAppData();
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const { me, team, isStaff, nameFor } = useAppData();
+  // Guardamos de quién son las filas: al cambiar de persona, se esperan las nuevas
+  const [data, setData] = useState<{ person: string; rows: Row[] } | null>(null);
   const [mode, setMode] = useState<"hoy" | "todas">("hoy");
+  // Dirección (admin y directores) puede ver las tareas de otra persona del equipo
+  const [who, setWho] = useState<string>("");
+  const personId = who || me.id;
+  const people = isStaff
+    ? Object.values(team).filter((p) => p.role !== "cliente" && p.role !== "comercial" && p.id !== me.id)
+    : [];
 
   useEffect(() => {
-    if (!me.id) return;
+    if (!personId) return;
     createClient()
       .from("tasks")
       .select("id, project_id, title, due_date")
-      .eq("assignee_id", me.id)
+      .eq("assignee_id", personId)
       .eq("done", false)
       .eq("assigned_to_client", false)
-      .then(({ data }) => setRows((data as Row[]) || []));
-  }, [me.id]);
+      .then(({ data: d }) => setData({ person: personId, rows: (d as Row[]) || [] }));
+  }, [personId]);
 
+  const rows = data && data.person === personId ? data.rows : null;
   if (rows === null) return null;
 
   const today = todayISO();
@@ -61,7 +69,18 @@ export function MyTasks({ projects }: { projects: Record<string, Project> }) {
     <div className="mytasks">
       <div className="dash-section-head">
         <div className="section-title">
-          Mis tareas<span className="dash-count">{shown.length}</span>
+          {personId === me.id ? "Mis tareas" : `Tareas de ${nameFor(personId).split(" ")[0]}`}
+          <span className="dash-count">{shown.length}</span>
+          {people.length > 0 && (
+            <select className="mytasks-who" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Ver tareas de">
+              <option value="">Yo</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {(p.full_name || "Sin nombre").split(" ")[0]}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="mytasks-toggle">
           <button className={mode === "hoy" ? "on" : ""} onClick={() => setMode("hoy")}>
@@ -76,9 +95,9 @@ export function MyTasks({ projects }: { projects: Record<string, Project> }) {
         <div className="empty mytasks-empty">
           {mode === "hoy"
             ? rows.length > 0
-              ? "Nada para hoy. Tienes tareas sin fecha o para más adelante en «Todas»."
-              : "No tienes tareas abiertas a tu nombre."
-            : "No tienes tareas abiertas a tu nombre."}
+              ? "Nada para hoy. Hay tareas sin fecha o para más adelante en «Todas»."
+              : personId === me.id ? "No tienes tareas abiertas a tu nombre." : "No tiene tareas abiertas."
+            : personId === me.id ? "No tienes tareas abiertas a tu nombre." : "No tiene tareas abiertas."}
         </div>
       ) : (
         <div className="card mytasks-list">
